@@ -22,8 +22,8 @@ let gameActive = false;
 let gameTimer = null;
 
 function getRandomInterval() {
-  // Random interval between 30 seconds and 5 minutes (30000ms to 300000ms)
-  return Math.random() * (300000 - 30000) + 30000;
+  // 5 to 15 minutes is much more "server-friendly"
+  return Math.random() * (900000 - 300000) + 300000;
 }
 
 function startGameRound(bot) {
@@ -112,13 +112,14 @@ function startBot() {
 
       // Check if player said the game word
       if (gameActive && message.toLowerCase().includes(gameWord.toLowerCase())) {
-        trackWin(username);
-        gameActive = false;
-        if (gameTimer) clearTimeout(gameTimer);
-        bot.chat(`🎉 ${username} said the word and won a point!`);
-        startGameRound(bot);
-      }
-
+    trackWin(username);
+    gameActive = false;
+    if (gameTimer) clearTimeout(gameTimer);
+    bot.chat(`🎉 ${username} won! Next round in 5 minutes.`);
+  
+    // Wait 5 minutes before the next game starts
+    setTimeout(() => startGameRound(bot), 300000); 
+}
       if (message.startsWith('!')) {
         const parts = message.split(/\s+/);
         const command = parts[0];

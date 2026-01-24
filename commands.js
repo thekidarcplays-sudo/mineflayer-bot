@@ -3,6 +3,9 @@ const { faker } = require('@faker-js/faker');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const wiki = require('wikipedia');
+let SummarizerManager = require("node-summarizer").SummarizerManager;
+
 
 const mcDataModule = require('minecraft-data');
 const CURSES_FILE = path.join(__dirname, 'curses.json');
@@ -88,7 +91,7 @@ async function cmd_gpt(bot, username, args) {
     const res = await axios.get(`https://text.pollinations.ai/text/${encodedPrompt}`);
     const answer = String(res.data).slice(0, 300);
     
-    // Store in cache
+    // Caching because my wifi sucks
     gptCache[cacheKey] = answer;
     try {
       fs.writeFileSync(GPT_CACHE_FILE, JSON.stringify(gptCache, null, 4), 'utf8');
@@ -180,9 +183,26 @@ async function cmd_leaderboard(bot, username, args) {
   });
 }
 
+async function cmd_wiki(bot, username, args) {
+  const query = Array.isArray(args) ? args.join('_') : args;
+  
+  try {
+    const response = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${query}`);
+    
+    if (!response.ok) {
+      return bot.whisper(username, "I couldn't find a Wikipedia page for that.");
+    }
+
+    const data = await response.json();
+    bot.whisper(username, data.extract);
+  } catch (err) {
+    bot.whisper(username, "Internal error fetching Wikipedia data.");
+  }
+}
  
-// Keep original mapping keys; add a more common '!say' alias too
 const COMMANDS = {
+  '!wikipedia': cmd_wiki,
+  '!wiki': cmd_wiki,
   '!randomword': cmd_randomword,
   '!hello': cmd_hello,
   '!info': cmd_info,
@@ -200,6 +220,14 @@ const COMMANDS = {
 };
 
 const COMMAND_INFO = {
+  '!wikipedia':{
+    description: 'Gets the wikipidia page for a word.',
+    format: '!wikipedia [word]'
+  },
+  '!wiki':{
+    description: 'Gets the wikipidia page for a word.',
+    format: '!wiki [word]'
+  },
   '!randomword': {
     description: 'Generates a random word',
     format: '!randomword'
@@ -231,10 +259,6 @@ const COMMAND_INFO = {
   '!say': {
     description: 'Makes the bot say something in chat',
     format: '!say [message]'
-  },
-  '!give': {
-    description: 'Gives you an item (bot must be nearby)',
-    format: '!give [item] [count]'
   },
   '!fight': {
     description: 'Initiates combat with you',
@@ -270,3 +294,6 @@ function trackWin(username) {
 }
 
 module.exports = { COMMANDS, trackWin };
+if (require.main === module) {
+    console.log('I am a module!')
+} 

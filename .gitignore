@@ -3,3 +3,5 @@ node_modules/
 __pycache__/
 players.json
 curses.json
+gpt_cache.json
+wins.json

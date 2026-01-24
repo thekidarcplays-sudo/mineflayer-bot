@@ -9,6 +9,8 @@
     "bad-words": "^3.0.4",
     "random-words": "^1.2.0",
     "@faker-js/faker": "^8.0.2",
-    "axios": "^1.4.0"
+    "axios": "^1.4.0",
+    "wikipedia": "2.4.2",
+    "node-summarizer": "1.0.7"
   }
 }
