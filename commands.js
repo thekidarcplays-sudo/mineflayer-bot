@@ -1,8 +1,33 @@
 const randomWords = require('random-words');
 const { faker } = require('@faker-js/faker');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 const mcDataModule = require('minecraft-data');
+const CURSES_FILE = path.join(__dirname, 'curses.json');
+const GPT_CACHE_FILE = path.join(__dirname, 'gpt_cache.json');
+const WINS_FILE = path.join(__dirname, 'wins.json');
+
+// Initialize GPT cache
+let gptCache = {};
+if (fs.existsSync(GPT_CACHE_FILE)) {
+  try {
+    gptCache = JSON.parse(fs.readFileSync(GPT_CACHE_FILE, 'utf8') || '{}');
+  } catch (err) {
+    console.error('Failed to load GPT cache', err);
+  }
+}
+
+// Initialize wins data
+let winsData = {};
+if (fs.existsSync(WINS_FILE)) {
+  try {
+    winsData = JSON.parse(fs.readFileSync(WINS_FILE, 'utf8') || '{}');
+  } catch (err) {
+    console.error('Failed to load wins data', err);
+  }
+}
 async function cmd_randomsentence(bot, username, args) {
   const sentence = faker.lorem.sentence();
   bot.whisper(username, sentence);
@@ -27,8 +52,21 @@ async function cmd_randomnumber(bot, username, args) {
 }
 
 async function cmd_help(bot, username, args) {
-  const cmds = Object.keys(COMMANDS).sort();
-  bot.whisper(username, 'Available commands: ' + cmds.join(', '));
+  if (args && args.length > 0) {
+    const commandName = args[0].startsWith('!') ? args[0] : '!' + args[0];
+    const cmd = COMMAND_INFO[commandName];
+    if (cmd) {
+      bot.whisper(username, `Command: ${commandName}`);
+      bot.whisper(username, `Description: ${cmd.description}`);
+      bot.whisper(username, `Format: ${cmd.format}`);
+    } else {
+      bot.whisper(username, `Unknown command: ${args[0]}`);
+    }
+  } else {
+    const cmds = Object.keys(COMMANDS).sort();
+    bot.whisper(username, 'Available commands: ' + cmds.join(', '));
+    bot.whisper(username, 'Use !help [command] for more details.');
+  }
 }
 
 async function cmd_gpt(bot, username, args) {
@@ -36,11 +74,29 @@ async function cmd_gpt(bot, username, args) {
     bot.whisper(username, 'Please provide a prompt for GPT.');
     return;
   }
-  const prompt = encodeURIComponent(args.join(' '));
+  const prompt = args.join(' ');
+  const cacheKey = prompt.toLowerCase();
+  
+  // Check cache first
+  if (gptCache[cacheKey]) {
+    bot.whisper(username, gptCache[cacheKey] + ' (cached)');
+    return;
+  }
+  
+  const encodedPrompt = encodeURIComponent(prompt);
   try {
-    const res = await axios.get(`https://text.pollinations.ai/text/${prompt}`);
-    const answer = res.data;
-    bot.whisper(username, String(answer).slice(0, 300));
+    const res = await axios.get(`https://text.pollinations.ai/text/${encodedPrompt}`);
+    const answer = String(res.data).slice(0, 300);
+    
+    // Store in cache
+    gptCache[cacheKey] = answer;
+    try {
+      fs.writeFileSync(GPT_CACHE_FILE, JSON.stringify(gptCache, null, 4), 'utf8');
+    } catch (err) {
+      console.error('Failed to write GPT cache', err);
+    }
+    
+    bot.whisper(username, answer);
   } catch (err) {
     console.error('cmd_gpt error', err?.message || err);
     bot.whisper(username, 'Failed to fetch GPT response.');
@@ -78,114 +134,53 @@ async function cmd_say(bot, username, args) {
   bot.chat(args.join(' '));
 }
 
-
-async function cmd_give(bot, username, args) {
+async function cmd_timescursed(bot, username, args) {
   if (!args || args.length === 0) {
-    bot.whisper(username, 'Usage: !give <item> [count]');
+    bot.whisper(username, 'Usage: !timescursed [player]');
     return;
   }
-
-  const mcData = mcDataModule(bot.version);
-  const rawName = args[0].toLowerCase();
-  const count = Math.max(1, parseInt(args[1]) || 1);
-
-  // normalize candidate names
-  const normalize = name => name.replace(/\s+/g, '_').replace(/-/g, '_');
-  const nameKey = normalize(rawName);
-
-  const itemDef = mcData.itemsByName[nameKey] || mcData.itemsByName[nameKey + 's'];
-  if (!itemDef) {
-    bot.whisper(username, `Unknown item: ${args[0]}`);
-    return;
-  }
-
-  const player = bot.players[username];
-  if (!player || !player.entity) {
-    bot.whisper(username, "I can't see you to give the item!");
-    return;
-  }
-
-  // check inventory
-  const invItems = bot.inventory.items();
-  let have = 0;
-  let invItem = null;
-  for (const it of invItems) {
-    if (it.type === itemDef.id) {
-      have += it.count;
-      invItem = it;
-    }
-  }
-
-  if (have < count) {
-    bot.whisper(username, `I have ${have} ${args[0]}. Trying to obtain ${count - have} more...`);
-
-    // Try crafting using recipe if available
+  
+  const playerName = args[0];
+  let data = {};
+  if (fs.existsSync(CURSES_FILE)) {
     try {
-      const recipes = bot.recipesFor ? bot.recipesFor(itemDef.id) : [];
-      if (recipes && recipes.length) {
-        // try to craft missing amount
-        const recipe = recipes[0];
-        // find crafting table if required
-        let craftingTable = null;
-        try {
-          craftingTable = bot.findBlock({ matching: b => b.name && b.name.includes('crafting_table'), maxDistance: 32 });
-        } catch (e) { craftingTable = null; }
-        await bot.craft(recipe, count - have, craftingTable || null);
-      } else {
-        // fallback: try mining common raw materials for simple items (logs -> planks/sticks, stone)
-        const n = nameKey;
-        if (n.includes('plank') || n === 'stick') {
-          // mine any log
-          const logIds = Object.keys(mcData.blocks).filter(k => k.endsWith('_log')).map(k => mcData.blocksByName[k]?.id).filter(Boolean);
-          const block = bot.findBlock({ matching: b => logIds.includes(b.type), maxDistance: 64 });
-          if (block) {
-            const { GoalNear } = require('mineflayer-pathfinder').goals;
-            await bot.pathfinder.goto(new GoalNear(block.position.x, block.position.y, block.position.z, 1));
-            await bot.dig(block);
-            // attempt craft again
-            const recipes2 = bot.recipesFor ? bot.recipesFor(itemDef.id) : [];
-            if (recipes2 && recipes2.length) await bot.craft(recipes2[0], count - have);
-          }
-        } else if (n === 'cobblestone' || n === 'stone') {
-          const stoneId = mcData.blocksByName.stone && mcData.blocksByName.stone.id;
-          if (stoneId) {
-            const block = bot.findBlock({ matching: stoneId, maxDistance: 64 });
-            if (block) {
-              const { GoalNear } = require('mineflayer-pathfinder').goals;
-              await bot.pathfinder.goto(new GoalNear(block.position.x, block.position.y, block.position.z, 1));
-              await bot.dig(block);
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error('cmd_give obtain error', err);
-    }
+      data = JSON.parse(fs.readFileSync(CURSES_FILE, 'utf8') || '{}');
+    } catch (err) {}
   }
-
-  // refresh inventory lookup
-  const finalItem = bot.inventory.items().find(i => i.type === itemDef.id);
-  const finalCount = finalItem ? finalItem.count : 0;
-  if (!finalCount) {
-    bot.whisper(username, `I couldn't obtain any ${args[0]}.`);
-    return;
-  }
-
-  // go to player and drop
-  try {
-    const { GoalNear } = require('mineflayer-pathfinder').goals;
-    await bot.pathfinder.goto(new GoalNear(player.entity.position.x, player.entity.position.y, player.entity.position.z, 2));
-    const giveCount = Math.min(count, finalCount);
-    await bot.toss(finalItem.type, null, giveCount);
-    bot.whisper(username, `Dropped ${giveCount} ${args[0]} near you.`);
-  } catch (err) {
-    console.error('cmd_give give error', err);
-    bot.whisper(username, 'Failed to give the item.');
-  }
+  
+  const curseCount = data[playerName] || 0;
+  bot.whisper(username, `${playerName} has cursed ${curseCount} times.`);
 }
 
+async function cmd_wins(bot, username, args) {
+  if (!args || args.length === 0) {
+    const wins = winsData[username] || 0;
+    bot.whisper(username, `You have ${wins} wins.`);
+    return;
+  }
+  
+  const playerName = args[0];
+  const wins = winsData[playerName] || 0;
+  bot.whisper(username, `${playerName} has ${wins} wins.`);
+}
 
+async function cmd_leaderboard(bot, username, args) {
+  if (Object.keys(winsData).length === 0) {
+    bot.whisper(username, 'No wins recorded yet.');
+    return;
+  }
+  
+  const sorted = Object.entries(winsData)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+  
+  bot.whisper(username, 'Top 10 Winners:');
+  sorted.forEach((entry, index) => {
+    bot.whisper(username, `${index + 1}. ${entry[0]}: ${entry[1]} wins`);
+  });
+}
 
+ 
 // Keep original mapping keys; add a more common '!say' alias too
 const COMMANDS = {
   '!randomword': cmd_randomword,
@@ -197,9 +192,81 @@ const COMMANDS = {
   '!stop': cmd_stop,
   '!sat': cmd_say,
   '!say': cmd_say,
-  '!give': cmd_give,
   '!fight': cmd_fight,
-  '!randomnumber': cmd_randomnumber
+  '!randomnumber': cmd_randomnumber,
+  '!timescursed': cmd_timescursed,
+  '!wins': cmd_wins,
+  '!leaderboard': cmd_leaderboard
 };
 
-module.exports = { COMMANDS };
+const COMMAND_INFO = {
+  '!randomword': {
+    description: 'Generates a random word',
+    format: '!randomword'
+  },
+  '!hello': {
+    description: 'Greets you',
+    format: '!hello'
+  },
+  '!info': {
+    description: 'Shows bot information',
+    format: '!info'
+  },
+  '!help': {
+    description: 'Lists all commands or shows details about a specific command',
+    format: '!help [command]'
+  },
+  '!gpt': {
+    description: 'Sends a prompt to GPT and returns the response',
+    format: '!gpt [prompt]'
+  },
+  '!randomsentence': {
+    description: 'Generates a random sentence',
+    format: '!randomsentence'
+  },
+  '!stop': {
+    description: 'Stops bot combat',
+    format: '!stop'
+  },
+  '!say': {
+    description: 'Makes the bot say something in chat',
+    format: '!say [message]'
+  },
+  '!give': {
+    description: 'Gives you an item (bot must be nearby)',
+    format: '!give [item] [count]'
+  },
+  '!fight': {
+    description: 'Initiates combat with you',
+    format: '!fight'
+  },
+  '!randomnumber': {
+    description: 'Generates a random number between 1 and 10',
+    format: '!randomnumber'
+  },
+  '!timescursed': {
+    description: 'Shows how many times a player has cursed',
+    format: '!timescursed [player]'
+  },
+  '!wins': {
+    description: 'Shows how many times you or another player has won the chat game',
+    format: '!wins [player]'
+  },
+  '!leaderboard': {
+    description: 'Shows the top 10 players with the most wins',
+    format: '!leaderboard'
+  }
+};
+
+function trackWin(username) {
+  const count = (winsData[username] || 0) + 1;
+  winsData[username] = count;
+  
+  try {
+    fs.writeFileSync(WINS_FILE, JSON.stringify(winsData, null, 4), 'utf8');
+  } catch (err) {
+    console.error('Failed to write wins.json', err);
+  }
+}
+
+module.exports = { COMMANDS, trackWin };

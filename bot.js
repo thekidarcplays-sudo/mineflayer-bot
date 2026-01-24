@@ -5,9 +5,11 @@ const { pathfinder } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
 const Filter = require('bad-words');
 const filter = new Filter();
-const { COMMANDS } = require('./commands');
+const randomWords = require('random-words');
+const { COMMANDS, trackWin } = require('./commands');
 
 const DATA_FILE = path.join(__dirname, 'players.json');
+const CURSES_FILE = path.join(__dirname, 'curses.json');
 const OPTIONS = {
   host: 'localhost',
   port: 25565,
@@ -15,6 +17,51 @@ const OPTIONS = {
 };
 
 let rejoinAttempts = 0;
+let gameWord = null;
+let gameActive = false;
+let gameTimer = null;
+
+function getRandomInterval() {
+  // Random interval between 30 seconds and 5 minutes (30000ms to 300000ms)
+  return Math.random() * (300000 - 30000) + 30000;
+}
+
+function startGameRound(bot) {
+  gameWord = randomWords()[0];
+  gameActive = true;
+  bot.chat(`🎮 GAME STARTED! Say the word: ${gameWord}`);
+  
+  // Schedule next round
+  if (gameTimer) clearTimeout(gameTimer);
+  gameTimer = setTimeout(() => {
+    gameActive = false;
+    bot.chat(`⏰ Game round ended. No one said the word!`);
+    startGameRound(bot);
+  }, getRandomInterval());
+}
+
+function getNewGameWord() {
+  gameWord = randomWords()[0];
+  return gameWord;
+}
+
+function trackCurse(username) {
+  let data = {};
+  if (fs.existsSync(CURSES_FILE)) {
+    try {
+      data = JSON.parse(fs.readFileSync(CURSES_FILE, 'utf8') || '{}');
+    } catch (err) {}
+  }
+
+  const count = (data[username] || 0) + 1;
+  data[username] = count;
+
+  try {
+    fs.writeFileSync(CURSES_FILE, JSON.stringify(data, null, 4), 'utf8');
+  } catch (err) {
+    console.error('Failed to write curses.json', err);
+  }
+}
 
 function updatePlayerCount(username, bot) {
   let data = {};
@@ -48,6 +95,7 @@ function startBot() {
   bot.on('spawn', () => {
     console.log(`${OPTIONS.username} spawned.`);
     bot.chat('Bot active!');
+    startGameRound(bot);
   });
 
   bot.on('chat', (username, message) => {
@@ -56,9 +104,19 @@ function startBot() {
 
       const isProfane = filter.isProfane(message);
       if (isProfane) {
+        trackCurse(username);
         bot.whisper(username, 'Please avoid using profanity.');
         // still process command if starts with '!'
         if (!message.startsWith('!')) return;
+      }
+
+      // Check if player said the game word
+      if (gameActive && message.toLowerCase().includes(gameWord.toLowerCase())) {
+        trackWin(username);
+        gameActive = false;
+        if (gameTimer) clearTimeout(gameTimer);
+        bot.chat(`🎉 ${username} said the word and won a point!`);
+        startGameRound(bot);
       }
 
       if (message.startsWith('!')) {
