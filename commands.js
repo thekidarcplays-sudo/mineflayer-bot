@@ -295,5 +295,5 @@ function trackWin(username) {
 
 module.exports = { COMMANDS, trackWin };
 if (require.main === module) {
-    console.log('I am a module!')
+    console.log('I am a module! Use bot.js to run me!');
 } 

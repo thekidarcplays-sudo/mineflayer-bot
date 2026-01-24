@@ -92,7 +92,7 @@ function startBot() {
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
 
-  bot.on('spawn', () => {
+  bot.once('spawn', () => {
     console.log(`${OPTIONS.username} spawned.`);
     bot.chat('Bot active!');
     startGameRound(bot);
