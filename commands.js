@@ -12,6 +12,22 @@ const CURSES_FILE = path.join(__dirname, 'curses.json');
 const GPT_CACHE_FILE = path.join(__dirname, 'gpt_cache.json');
 const WINS_FILE = path.join(__dirname, 'wins.json');
 
+const leetMap = {
+    'a': '4', 'b': '8', 'c': '(', 'd': '|)', 'e': '3', 'f': '|=',
+    'g': '6', 'h': '#', 'i': '1', 'j': '_|', 'k': '|<', 'l': '1',
+    'm': '|\\/|', 'n': '|\\|', 'o': '0', 'p': '|*', 'q': '(,)',
+    'r': '|2', 's': '5', 't': '7', 'u': '|_|', 'v': '\\/',
+    'w': '\\/\\/', 'x': '><', 'y': '`/', 'z': '2'
+};
+
+function translateToLeet(text) {
+    return text
+        .toLowerCase() // Ensure it matches the lowercase keys in your map
+        .split('')     // Turn "hello" into ['h', 'e', 'l', 'l', 'o']
+        .map(char => leetMap[char] || char) // Swap if it exists, otherwise keep original
+        .join('');    // Turn back into a string
+}
+
 // Initialize GPT cache
 let AICache = {};
 if (fs.existsSync(GPT_CACHE_FILE)) {
@@ -216,7 +232,14 @@ async function cmd_summarizer(bot, username, args) {
   
   }
 
-
+async function cmd_leetspeak(bot, username, args) {
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Please provide text to convert to leetspeak.');
+    return;
+  }
+  const leetText = translateToLeet(args.join(' '));
+  bot.whisper(username, leetText);
+}
 
 async function cmd_joke(bot, username) {
     try {
@@ -236,6 +259,7 @@ async function cmd_joke(bot, username) {
 }
 
   const COMMANDS = {
+  '!leet': cmd_leetspeak,
   '!joke': cmd_joke,
   '!summary': cmd_summarizer,
   '!wikipedia': cmd_wiki,
@@ -257,6 +281,10 @@ async function cmd_joke(bot, username) {
 };
 
 const COMMAND_INFO = {
+  '!leet': {
+    description: 'Converts text to leetspeak.',
+    format: '!leet [text]'
+  },
   '!joke':{
     description: 'Tells a random joke.',
     format: '!joke'
