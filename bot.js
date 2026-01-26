@@ -103,7 +103,12 @@ function startBot() {
   bot.on('chat', (username, message) => {
     try {
       if (username === bot.username) return;
+      const timestamp = new Date().toLocaleString();
+    const logEntry = `[${timestamp}] ${username}: ${message}\n`;
 
+    fs.appendFile('chat_logs.txt', logEntry, (err) => {
+      if (err) console.error('Failed to save chat message:', err);
+    });
       const isProfane = filter.isProfane(message);
       if (isProfane) {
         trackCurse(username);
