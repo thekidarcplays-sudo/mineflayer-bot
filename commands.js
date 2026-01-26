@@ -279,8 +279,7 @@ async function cmd_dogfact(bot, username, args) {
         const json = await response.json();
         
         // Drill down into the JSON structure
-        const fact = json.data[0].attributes.body;
-        
+        const fact = json.data?.[0]?.attributes?.body || "Could not find a dog fact.";        
         bot.whisper(username, fact);
     } catch (error) {
         console.error('Error fetching dog fact:', error);
