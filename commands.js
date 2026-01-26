@@ -258,7 +258,63 @@ async function cmd_joke(bot, username) {
     }
 }
 
+async function cmd_catfact(bot, username, args) {
+    try {
+        const response = await fetch('https://catfact.ninja/fact');
+        const data = await response.json();
+        bot.whisper(username, data.fact);
+    } catch (error) {
+        console.error('Error fetching cat fact:', error);
+        bot.whisper(username, 'Sorry, I could not fetch a cat fact at this time.');
+    }
+}
+
+async function cmd_dogfact(bot, username, args) {
+    try {
+        const response = await fetch('https://dogapi.dog/api/v2/facts');
+        
+        // Check if the HTTP request actually succeeded
+        if (!response.ok) throw new Error('Network response was not ok');
+
+        const json = await response.json();
+        
+        // Drill down into the JSON structure
+        const fact = json.data[0].attributes.body;
+        
+        bot.whisper(username, fact);
+    } catch (error) {
+        console.error('Error fetching dog fact:', error);
+        bot.whisper(username, 'Sorry, I could not fetch a dog fact at this time.');
+    }
+}
+
+async function cmd_base64(bot, username, args) {
+  if (args.length < 2) {
+    bot.whisper(username, 'Usage: !base64 <encode|decode> <text>');
+    return;
+  }
+
+  const action = args[0].toLowerCase();
+  const text = args.slice(1).join(' ');
+
+  try {
+    if (action === 'encode') {
+      const encoded = Buffer.from(text).toString('base64');
+      bot.whisper(username, `Encoded: ${encoded}`);
+    } else if (action === 'decode') {
+      const decoded = Buffer.from(text, 'base64').toString('utf8');
+      bot.whisper(username, `Decoded: ${decoded}`);
+    } else {
+      bot.whisper(username, 'Please specify "encode" or "decode".');
+    }
+  } catch (err) {
+    bot.whisper(username, 'Error: Could not process that text.');
+  }
+}
   const COMMANDS = {
+  '!base64': cmd_base64,
+  '!dogfact': cmd_dogfact,
+  '!catfact': cmd_catfact,
   '!leet': cmd_leetspeak,
   '!joke': cmd_joke,
   '!summary': cmd_summarizer,
@@ -281,6 +337,18 @@ async function cmd_joke(bot, username) {
 };
 
 const COMMAND_INFO = {
+  '!base64': {
+    description: 'Encodes or decodes text in Base64.',
+    format: '!base64 <encode|decode> <text>'
+  },
+  '!dogfact': {
+    description: 'Tells a random dog fact.',
+    format: '!dogfact'
+  },
+  '!catfact': {
+    description: 'Tells a random cat fact.',
+    format: '!catfact'
+  },
   '!leet': {
     description: 'Converts text to leetspeak.',
     format: '!leet [text]'
@@ -365,6 +433,7 @@ function trackWin(username) {
     console.error('Failed to write wins.json', err);
   }
 }
+
 
 if (require.main === module) {
     console.log('I am a module! Use bot.js to run me!')
