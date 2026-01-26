@@ -5,8 +5,8 @@ const { pathfinder } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
 const Filter = require('bad-words');
 const filter = new Filter();
-const randomWords = require('random-words');
 const { COMMANDS, trackWin } = require('./commands');
+const { faker } = require('@faker-js/faker');
 
 const DATA_FILE = path.join(__dirname, 'players.json');
 const CURSES_FILE = path.join(__dirname, 'curses.json');
@@ -27,7 +27,7 @@ function getRandomInterval() {
 }
 
 function startGameRound(bot) {
-  gameWord = randomWords()[0];
+  gameWord = faker.hacker.noun();
   gameActive = true;
   bot.chat(`🎮 GAME STARTED! Say the word: ${gameWord}`);
   
@@ -41,7 +41,7 @@ function startGameRound(bot) {
 }
 
 function getNewGameWord() {
-  gameWord = randomWords()[0];
+  gameWord = faker.hacker.noun()[0];
   return gameWord;
 }
 
@@ -95,8 +95,10 @@ function startBot() {
   bot.once('spawn', () => {
     console.log(`${OPTIONS.username} spawned.`);
     bot.chat('Bot active!');
+    rejoinAttempts = 0;
     startGameRound(bot);
   });
+
 
   bot.on('chat', (username, message) => {
     try {

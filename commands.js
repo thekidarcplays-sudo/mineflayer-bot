@@ -1,22 +1,22 @@
-const randomWords = require('random-words');
 const { faker } = require('@faker-js/faker');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const wiki = require('wikipedia');
 let SummarizerManager = require("node-summarizer").SummarizerManager;
-
+const Filter = require('bad-words');
+const filter = new Filter();
 
 const mcDataModule = require('minecraft-data');
+const { time } = require('console');
 const CURSES_FILE = path.join(__dirname, 'curses.json');
 const GPT_CACHE_FILE = path.join(__dirname, 'gpt_cache.json');
 const WINS_FILE = path.join(__dirname, 'wins.json');
 
 // Initialize GPT cache
-let gptCache = {};
+let AICache = {};
 if (fs.existsSync(GPT_CACHE_FILE)) {
   try {
-    gptCache = JSON.parse(fs.readFileSync(GPT_CACHE_FILE, 'utf8') || '{}');
+    AICache = JSON.parse(fs.readFileSync(GPT_CACHE_FILE, 'utf8') || '{}');
   } catch (err) {
     console.error('Failed to load GPT cache', err);
   }
@@ -37,7 +37,7 @@ async function cmd_randomsentence(bot, username, args) {
 }
 
 async function cmd_randomword(bot, username, args) {
-  const word = randomWords();
+  const word = faker.hacker.noun();
   bot.whisper(username, word);
 }
 
@@ -47,6 +47,7 @@ async function cmd_hello(bot, username, args) {
 
 async function cmd_info(bot, username, args) {
   bot.whisper(username, 'I am a Node.js Mineflayer bot ported from the Python version. I was ported because the JavaScript libary on python sucks');
+  // NO I WILL NOT BE PORTING THIS BACK
 }
 
 async function cmd_randomnumber(bot, username, args) {
@@ -71,8 +72,8 @@ async function cmd_help(bot, username, args) {
     bot.whisper(username, 'Use !help [command] for more details.');
   }
 }
-
-async function cmd_gpt(bot, username, args) {
+// hopefully this doesnt dissappear tmr
+async function cmd_AI(bot, username, args) {
   if (!args || args.length === 0) {
     bot.whisper(username, 'Please provide a prompt for GPT.');
     return;
@@ -81,8 +82,8 @@ async function cmd_gpt(bot, username, args) {
   const cacheKey = prompt.toLowerCase();
   
   // Check cache first
-  if (gptCache[cacheKey]) {
-    bot.whisper(username, gptCache[cacheKey] + ' (cached)');
+  if (AICache[cacheKey]) {
+    bot.whisper(username, AICache[cacheKey] + ' (cached)');
     return;
   }
   
@@ -92,9 +93,9 @@ async function cmd_gpt(bot, username, args) {
     const answer = String(res.data).slice(0, 300);
     
     // Caching because my wifi sucks
-    gptCache[cacheKey] = answer;
+    AICache[cacheKey] = answer;
     try {
-      fs.writeFileSync(GPT_CACHE_FILE, JSON.stringify(gptCache, null, 4), 'utf8');
+      fs.writeFileSync(GPT_CACHE_FILE, JSON.stringify(AICache, null, 4), 'utf8');
     } catch (err) {
       console.error('Failed to write GPT cache', err);
     }
@@ -134,8 +135,11 @@ async function cmd_say(bot, username, args) {
     bot.whisper(username, 'Please provide a message for me to say.');
     return;
   }
-  bot.chat(args.join(' '));
-}
+  if (filter.isProfane(args.join(' '))) {
+    bot.chat(`${username} tried to make me curse!`)
+} else {
+    bot.chat(args.join(' '));
+}}
 
 async function cmd_timescursed(bot, username, args) {
   if (!args || args.length === 0) {
@@ -199,15 +203,48 @@ async function cmd_wiki(bot, username, args) {
     bot.whisper(username, "Internal error fetching Wikipedia data.");
   }
 }
- 
-const COMMANDS = {
+
+async function cmd_summarizer(bot, username, args) {
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Please provide text to summarize.');
+    return;
+  }
+  Summarizer = new SummarizerManager(args.join(' '),3)
+  let summary = Summarizer.getSummaryByFrequency(args).summary;
+
+   bot.whisper(username, summary);
+  
+  }
+
+
+
+async function cmd_joke(bot, username) {
+    try {
+        const response = await fetch('https://official-joke-api.appspot.com/random_joke');
+        const data = await response.json();
+
+        bot.whisper(username, `${data.setup}`);
+        
+        // Proper way to wait 2 seconds in an async function:
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        bot.whisper(username, `${data.punchline}`);
+    } catch (error) {
+        console.error('Error fetching joke:', error);
+        bot.whisper(username, 'Sorry, I could not fetch a joke at this time.');
+    }
+}
+
+  const COMMANDS = {
+  '!joke': cmd_joke,
+  '!summary': cmd_summarizer,
   '!wikipedia': cmd_wiki,
   '!wiki': cmd_wiki,
   '!randomword': cmd_randomword,
   '!hello': cmd_hello,
   '!info': cmd_info,
   '!help': cmd_help,
-  '!gpt': cmd_gpt,
+  '!ai': cmd_AI,
   '!randomsentence': cmd_randomsentence,
   '!stop': cmd_stop,
   '!sat': cmd_say,
@@ -220,6 +257,14 @@ const COMMANDS = {
 };
 
 const COMMAND_INFO = {
+  '!joke':{
+    description: 'Tells a random joke.',
+    format: '!joke'
+  },
+  '!summary':{
+    description: 'Summarizes the provided text.',
+    format: '!summary [text]'
+  },
   '!wikipedia':{
     description: 'Gets the wikipidia page for a word.',
     format: '!wikipedia [word]'
@@ -244,9 +289,9 @@ const COMMAND_INFO = {
     description: 'Lists all commands or shows details about a specific command',
     format: '!help [command]'
   },
-  '!gpt': {
-    description: 'Sends a prompt to GPT and returns the response',
-    format: '!gpt [prompt]'
+  '!ai': {
+    description: 'Sends a prompt to a AI and returns the response',
+    format: '!ai [prompt]'
   },
   '!randomsentence': {
     description: 'Generates a random sentence',
@@ -293,7 +338,7 @@ function trackWin(username) {
   }
 }
 
-module.exports = { COMMANDS, trackWin };
 if (require.main === module) {
-    console.log('I am a module! Use bot.js to run me!');
+    console.log('I am a module! Use bot.js to run me!')
 } 
+module.exports = { COMMANDS, trackWin };
