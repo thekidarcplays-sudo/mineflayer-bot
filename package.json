@@ -3,6 +3,7 @@
     "@faker-js/faker": "^8.0.2",
     "axios": "^1.4.0",
     "bad-words": "^3.0.4",
+    "mathjs": "^15.1.0",
     "minecraft-data": "^3.102.3",
     "mineflayer": "^4.33.0",
     "mineflayer-collectblock": "^1.6.0",

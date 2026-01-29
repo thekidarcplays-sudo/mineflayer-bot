@@ -30,7 +30,7 @@ function startGameRound(bot) {
   gameWord = faker.hacker.noun();
   gameActive = true;
   bot.chat(`🎮 GAME STARTED! Say the word: ${gameWord}`);
-  
+
   // Schedule next round
   if (gameTimer) clearTimeout(gameTimer);
   gameTimer = setTimeout(() => {
@@ -50,7 +50,7 @@ function trackCurse(username) {
   if (fs.existsSync(CURSES_FILE)) {
     try {
       data = JSON.parse(fs.readFileSync(CURSES_FILE, 'utf8') || '{}');
-    } catch (err) {}
+    } catch (err) { }
   }
 
   const count = (data[username] || 0) + 1;
@@ -68,7 +68,7 @@ function updatePlayerCount(username, bot) {
   if (fs.existsSync(DATA_FILE)) {
     try {
       data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '{}');
-    } catch (err) {}
+    } catch (err) { }
   }
 
   const count = (data[username] || 0) + 1;
@@ -104,11 +104,11 @@ function startBot() {
     try {
       if (username === bot.username) return;
       const timestamp = new Date().toLocaleString();
-    const logEntry = `[${timestamp}] ${username}: ${message}\n`;
+      const logEntry = `[${timestamp}] ${username}: ${message}\n`;
 
-    fs.appendFile('chat_logs.txt', logEntry, (err) => {
-      if (err) console.error('Failed to save chat message:', err);
-    });
+      fs.appendFile('chat_logs.txt', logEntry, (err) => {
+        if (err) console.error('Failed to save chat message:', err);
+      });
       const isProfane = filter.isProfane(message);
       if (isProfane) {
         trackCurse(username);
@@ -119,14 +119,14 @@ function startBot() {
 
       // Check if player said the game word
       if (gameActive && message.toLowerCase().includes(gameWord.toLowerCase())) {
-    trackWin(username);
-    gameActive = false;
-    if (gameTimer) clearTimeout(gameTimer);
-    bot.chat(`🎉 ${username} won! Next round in 5 minutes.`);
-  
-    // Wait 5 minutes before the next game starts
-    setTimeout(() => startGameRound(bot), 300000); 
-}
+        trackWin(username);
+        gameActive = false;
+        if (gameTimer) clearTimeout(gameTimer);
+        bot.chat(`🎉 ${username} won! Next round in 5 minutes.`);
+
+        // Wait 5 minutes before the next game starts
+        setTimeout(() => startGameRound(bot), 300000);
+      }
       if (message.startsWith('!')) {
         const parts = message.split(/\s+/);
         const command = parts[0];
@@ -137,13 +137,45 @@ function startBot() {
           if (res && typeof res.then === 'function') {
             res.catch(err => {
               console.error('Command error', err);
-              try { bot.whisper(username, 'Command error.'); } catch (e) {}
+              try { bot.whisper(username, 'Command error.'); } catch (e) { }
             });
           }
         }
       }
     } catch (err) {
       console.error('chat handler error', err);
+    }
+  });
+
+  bot.on('whisper', (username, message) => {
+    if (username === bot.username) return;
+
+    // If it looks like a command, run it
+    if (message.startsWith('!')) {
+      const parts = message.split(/\s+/);
+      const command = parts[0];
+      const args = parts.slice(1);
+      const fn = COMMANDS[command];
+      if (fn) {
+        const res = fn(bot, username, args);
+        if (res && typeof res.then === 'function') {
+          res.catch(err => {
+            console.error('Command error', err);
+            try { bot.whisper(username, 'Command error.'); } catch (e) { }
+          });
+        }
+      } else {
+        bot.whisper(username, "Unknown command.");
+      }
+    } else {
+      // Treat as conversation -> AI
+      const fn = COMMANDS['!ai'];
+      if (fn) {
+        // usage: cmd_AI(bot, username, args)
+        // args is array of words
+        const args = message.split(' ');
+        fn(bot, username, args);
+      }
     }
   });
 
@@ -170,6 +202,11 @@ function startBot() {
 
   bot.on('error', (err) => {
     console.error('Bot error', err);
+  });
+
+  bot.on('end', () => {
+    console.log('Bot disconnected. Reconnecting in 5s...');
+    setTimeout(() => startBot(), 5000);
   });
 
   return bot;
