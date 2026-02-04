@@ -1,7 +1,7 @@
 const { faker } = require('@faker-js/faker');
 const axios = require('axios');
 const fs = require('fs');
-const fs = require('fs');
+
 const path = require('path');
 const { exec } = require('child_process');
 let SummarizerManager = require("node-summarizer").SummarizerManager;
@@ -16,6 +16,7 @@ const { goals, Movements } = require('mineflayer-pathfinder');
 const CURSES_FILE = path.join(__dirname, 'curses.json');
 const GPT_CACHE_FILE = path.join(__dirname, 'gpt_cache.json');
 const WINS_FILE = path.join(__dirname, 'wins.json');
+const MAIL_FILE = path.join(__dirname, 'mail.json');
 
 // REPLACE THIS WITH YOUR MINECRAFT USERNAME
 const OWNER = 'me144';
@@ -57,6 +58,39 @@ if (fs.existsSync(WINS_FILE)) {
     console.error('Failed to load wins data', err);
   }
 }
+
+
+
+let mailData = {};
+if (fs.existsSync(MAIL_FILE)) {
+  try {
+    mailData = JSON.parse(fs.readFileSync(MAIL_FILE, 'utf8') || '{}');
+  } catch (err) {
+    console.error('Failed to load mail data', err);
+  }
+
+} else {
+  try {
+    fs.writeFileSync(MAIL_FILE, '{}', 'utf8');
+  } catch (err) {
+    console.error('Failed to create mail.json', err);
+  }
+}
+
+function saveMail() {
+  try {
+    fs.writeFileSync(MAIL_FILE, JSON.stringify(mailData, null, 4), 'utf8');
+  } catch (err) {
+    console.error('Failed to write mail.json', err);
+  }
+}
+
+function checkMail(bot, username) {
+  const messages = mailData[username];
+  if (messages && messages.length > 0) {
+    bot.whisper(username, `You have ${messages.length} unread messages! Use !readmail to view them.`);
+  }
+}
 async function cmd_math(bot, username, args) {
   const expression = args.join(' ');
   try {
@@ -94,7 +128,7 @@ async function cmd_randomnumber(bot, username, args) {
 
 async function cmd_help(bot, username, args) {
   if (args && args.length > 0) {
-    const commandName = args[0].startsWith('!') ? args[0] : '!' + args[0];
+    const commandName = (args[0].startsWith('!') ? args[0] : '!' + args[0]).toLowerCase();
     const cmd = COMMAND_INFO[commandName];
     if (cmd) {
       bot.whisper(username, `Command: ${commandName}`);
@@ -162,9 +196,78 @@ async function cmd_AI(bot, username, args) {
   }
 }
 
-async function cmd_forget(bot, username, args) {
+async function cmd_newchat(bot, username, args) {
   ConversationHistory[username] = [];
-  bot.whisper(username, 'I have forgotten our previous conversation.');
+  bot.whisper(username, 'I have forgotten our previous conversation. Starting a new chat!');
+}
+
+async function cmd_savechat(bot, username, args) {
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Usage: !savechat <name>');
+    return;
+  }
+  const chatName = args[0].replace(/[^a-z0-9_-]/gi, '_');
+  const history = ConversationHistory[username] || [];
+  const filePath = path.join(__dirname, 'chats', `${username}_${chatName}.json`);
+
+  try {
+    if (!fs.existsSync(path.join(__dirname, 'chats'))) {
+      fs.mkdirSync(path.join(__dirname, 'chats'));
+    }
+    fs.writeFileSync(filePath, JSON.stringify(history, null, 4), 'utf8');
+    bot.whisper(username, `Chat session saved as "${chatName}".`);
+  } catch (err) {
+    console.error('savechat error', err);
+    bot.whisper(username, 'Failed to save chat session.');
+  }
+}
+
+async function cmd_loadchat(bot, username, args) {
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Usage: !loadchat <name>');
+    return;
+  }
+  const chatName = args[0].replace(/[^a-z0-9_-]/gi, '_');
+  const filePath = path.join(__dirname, 'chats', `${username}_${chatName}.json`);
+
+  if (!fs.existsSync(filePath)) {
+    bot.whisper(username, `Chat session "${chatName}" not found.`);
+    return;
+  }
+
+  try {
+    const data = fs.readFileSync(filePath, 'utf8');
+    ConversationHistory[username] = JSON.parse(data);
+    bot.whisper(username, `Chat session "${chatName}" loaded!`);
+  } catch (err) {
+    console.error('loadchat error', err);
+    bot.whisper(username, 'Failed to load chat session.');
+  }
+}
+
+async function cmd_listchats(bot, username, args) {
+  const dirPath = path.join(__dirname, 'chats');
+  if (!fs.existsSync(dirPath)) {
+    bot.whisper(username, 'You have no saved chats.');
+    return;
+  }
+
+  try {
+    const files = fs.readdirSync(dirPath);
+    const prefix = `${username}_`;
+    const userChats = files
+      .filter(f => f.startsWith(prefix) && f.endsWith('.json'))
+      .map(f => f.slice(prefix.length, -5));
+
+    if (userChats.length === 0) {
+      bot.whisper(username, 'You have no saved chats.');
+    } else {
+      bot.whisper(username, 'Your saved chats: ' + userChats.join(', '));
+    }
+  } catch (err) {
+    console.error('listchats error', err);
+    bot.whisper(username, 'Failed to list chat sessions.');
+  }
 }
 
 async function cmd_follow(bot, username, args) {
@@ -217,6 +320,25 @@ async function cmd_refresh(bot, username, args) {
 
   bot.chat('🔄 Restarting bot process to apply updates...');
   process.exit(1);
+
+}
+
+async function cmd_fetchforupdates(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ You do not have permission to use this command.');
+    return;
+  }
+  bot.chat('⬇️ Fetching updates from git...');
+  exec('git pull', (error, stdout, stderr) => {
+    if (error) {
+      console.error(`exec error: ${error}`);
+      bot.whisper(username, 'Error fetching updates.');
+      return;
+    }
+    if (stdout) console.log(`stdout: ${stdout}`);
+    if (stderr) console.error(`stderr: ${stderr}`);
+    bot.chat('✅ Updates fetched. Use !restartbot to apply.');
+  });
 }
 
 async function cmd_say(bot, username, args) {
@@ -451,8 +573,85 @@ async function cmd_weather(bot, username, args) {
     bot.whisper(username, 'Error fetching weather.');
   }
 }
+
+async function cmd_food(bot, username, args) {
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Usage: !food <product name>');
+    return;
+  }
+  const query = args.join(' ');
+  try {
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1`;
+    const response = await axios.get(url);
+
+    if (response.data.products && response.data.products.length > 0) {
+      const product = response.data.products[0];
+      const name = product.product_name || 'Unknown Product';
+      const brand = product.brands || 'Unknown Brand';
+      const quantity = product.quantity || 'Unknown Quantity';
+      const grade = product.nutrition_grades ? product.nutrition_grades.toUpperCase() : '?';
+
+      bot.whisper(username, `Found: ${name} (${brand}, ${quantity}) - Nutrition Grade: ${grade}`);
+    } else {
+      bot.whisper(username, `No food found for "${query}".`);
+    }
+  } catch (err) {
+    console.error('food error', err);
+    bot.whisper(username, 'Error fetching food data.');
+  }
+}
+
+
+async function cmd_mail(bot, username, args) {
+  if (!args || args.length < 2) {
+    bot.whisper(username, 'Usage: !mail <username> <message>');
+    return;
+  }
+  const recipient = args[0];
+  const message = args.slice(1).join(' ');
+  const timestamp = new Date().toLocaleString();
+
+  if (!mailData[recipient]) {
+    mailData[recipient] = [];
+  }
+
+  mailData[recipient].push({
+    from: username,
+    message: message,
+    timestamp: timestamp
+  });
+
+  saveMail();
+  bot.whisper(username, `Mail sent to ${recipient}.`);
+}
+
+async function cmd_readmail(bot, username, args) {
+  const messages = mailData[username];
+  if (!messages || messages.length === 0) {
+    bot.whisper(username, 'You have no new mail.');
+    return;
+  }
+
+  bot.whisper(username, '--- 📬 Your Mailbox ---');
+  messages.forEach((msg, index) => {
+    bot.whisper(username, `${index + 1}. From ${msg.from} (${msg.timestamp}): ${msg.message}`);
+  });
+}
+
+async function cmd_clearmail(bot, username, args) {
+  if (!mailData[username] || mailData[username].length === 0) {
+    bot.whisper(username, 'Your mailbox is already empty.');
+    return;
+  }
+
+  mailData[username] = [];
+  saveMail();
+  bot.whisper(username, 'Mailbox cleared.');
+}
+
 const COMMANDS = {
   '!math': cmd_math,
+  '!food': cmd_food,
   '!news': cmd_news,
   '!weather': cmd_weather,
   '!ping': cmd_ping,
@@ -481,9 +680,16 @@ const COMMANDS = {
   '!wins': cmd_wins,
   '!leaderboard': cmd_leaderboard,
   '!follow': cmd_follow,
-  '!forget': cmd_forget,
+  '!newchat': cmd_newchat,
+  '!savechat': cmd_savechat,
+  '!loadchat': cmd_loadchat,
+  '!listchats': cmd_listchats,
   '!restartbot': cmd_refresh,
-  '!fetchforupdates': cmd_fetchforupdates
+  '!restartbot': cmd_refresh,
+  '!fetchforupdates': cmd_fetchforupdates,
+  '!mail': cmd_mail,
+  '!readmail': cmd_readmail,
+  '!clearmail': cmd_clearmail
 };
 
 const COMMAND_INFO = {
@@ -494,6 +700,10 @@ const COMMAND_INFO = {
   '!news': {
     description: 'Shows the latest world news headline.',
     format: '!news'
+  },
+  '!food': {
+    description: 'Searches OpenFoodFacts (name, brand, nutrition grade).',
+    format: '!food [product]'
   },
   '!weather': {
     description: 'Shows the current temperature for a city.',
@@ -599,9 +809,21 @@ const COMMAND_INFO = {
     description: 'Follows the player who sent the command',
     format: '!follow'
   },
-  '!forget': {
+  '!newchat': {
     description: 'Resets your AI conversation history',
-    format: '!forget'
+    format: '!newchat'
+  },
+  '!savechat': {
+    description: 'Saves your current AI conversation history',
+    format: '!savechat <name>'
+  },
+  '!loadchat': {
+    description: 'Loads a previously saved AI conversation history',
+    format: '!loadchat <name>'
+  },
+  '!listchats': {
+    description: 'Lists all your saved AI conversation histories',
+    format: '!listchats'
   },
   '!restartbot': {
     description: 'Owner only: Restarts the bot connection',
@@ -610,6 +832,18 @@ const COMMAND_INFO = {
   '!fetchforupdates': {
     description: 'Owner only: Pulls latest code from git',
     format: '!fetchforupdates'
+  },
+  '!mail': {
+    description: 'Sends a message to an offline or online player',
+    format: '!mail <username> <message>'
+  },
+  '!readmail': {
+    description: 'Reads your messages',
+    format: '!readmail'
+  },
+  '!clearmail': {
+    description: 'Clears all your messages',
+    format: '!clearmail'
   }
 };
 
@@ -628,4 +862,5 @@ function trackWin(username) {
 if (require.main === module) {
   console.log('I am a module! Use bot.js to run me!')
 }
-module.exports = { COMMANDS, trackWin }
+
+module.exports = { COMMANDS, trackWin, checkMail }

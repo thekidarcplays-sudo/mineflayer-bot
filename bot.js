@@ -5,7 +5,7 @@ const { pathfinder } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
 const Filter = require('bad-words');
 const filter = new Filter();
-const { COMMANDS, trackWin } = require('./commands');
+const { COMMANDS, trackWin, checkMail } = require('./commands');
 const { faker } = require('@faker-js/faker');
 
 const DATA_FILE = path.join(__dirname, 'players.json');
@@ -129,7 +129,7 @@ function startBot() {
       }
       if (message.startsWith('!')) {
         const parts = message.split(/\s+/);
-        const command = parts[0];
+        const command = parts[0].toLowerCase();
         const args = parts.slice(1);
         const fn = COMMANDS[command];
         if (fn) {
@@ -153,7 +153,7 @@ function startBot() {
     // If it looks like a command, run it
     if (message.startsWith('!')) {
       const parts = message.split(/\s+/);
-      const command = parts[0];
+      const command = parts[0].toLowerCase();
       const args = parts.slice(1);
       const fn = COMMANDS[command];
       if (fn) {
@@ -179,14 +179,38 @@ function startBot() {
     }
   });
 
+  bot.on('entityHurt', (entity) => {
+    if (entity !== bot.entity) return;
+    if (bot.pvp.target) return; // Already fighting
+
+    // Find the nearest attacker (player or mob) within 4 blocks
+    const attacker = bot.nearestEntity(e =>
+      (e.type === 'player' || e.type === 'mob') &&
+      e.position.distanceTo(bot.entity.position) < 4 &&
+      e !== bot.entity
+    );
+
+    if (attacker) {
+      const name = attacker.username || attacker.displayName || attacker.name;
+      bot.chat(`I am being attacked by ${name}! Defending myself!`);
+      bot.pvp.attack(attacker);
+    }
+  });
+
   // Listen for both event names to be resilient
   bot.on('playerJoined', player => {
     const name = (player && player.username) ? player.username : player;
-    if (name && name !== bot.username) updatePlayerCount(name, bot);
+    if (name && name !== bot.username) {
+      updatePlayerCount(name, bot);
+      checkMail(bot, name);
+    }
   });
   bot.on('playerJoin', player => {
     const name = (player && player.username) ? player.username : player;
-    if (name && name !== bot.username) updatePlayerCount(name, bot);
+    if (name && name !== bot.username) {
+      updatePlayerCount(name, bot);
+      checkMail(bot, name);
+    }
   });
 
   bot.on('kicked', (reason) => {
