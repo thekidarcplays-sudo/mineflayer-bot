@@ -12,13 +12,15 @@ const { evaluate } = require("mathjs");
 console.log('Loading Mineflayer Bot...');
 
 const { goals, Movements } = require('mineflayer-pathfinder');
-const CURSES_FILE = path.join(__dirname, 'curses.json');
-const GPT_CACHE_FILE = path.join(__dirname, 'gpt_cache.json');
-const WINS_FILE = path.join(__dirname, 'wins.json');
-const MAIL_FILE = path.join(__dirname, 'mail.json');
+const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 
-// REPLACE THIS WITH YOUR MINECRAFT USERNAME
-const OWNER = 'me144';
+const CURSES_FILE = path.join(__dirname, config.files.curses);
+const GPT_CACHE_FILE = path.join(__dirname, config.files.gptCache);
+const WINS_FILE = path.join(__dirname, config.files.wins);
+const MAIL_FILE = path.join(__dirname, config.files.mail);
+
+const OWNER = config.owner;
+
 
 const leetMap = {
   'a': '4', 'b': '8', 'e': '3',
@@ -615,6 +617,24 @@ async function cmd_clearmail(bot, username, args) {
   bot.whisper(username, 'Mailbox cleared.');
 }
 
+async function cmd_togglechatgames(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ You do not have permission to use this command.');
+    return;
+  }
+
+  config.game.enabled = !config.game.enabled;
+  try {
+    fs.writeFileSync(path.join(__dirname, 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+    const status = config.game.enabled ? 'ENABLED' : 'DISABLED';
+    bot.chat(`🎮 Chat games have been ${status} by the owner.`);
+  } catch (err) {
+    console.error('Failed to save config.json', err);
+    bot.whisper(username, 'Failed to save configuration change.');
+  }
+}
+
+
 const COMMANDS = {
   '!math': cmd_math,
   '!food': cmd_food,
@@ -652,8 +672,10 @@ const COMMANDS = {
   '!listchats': cmd_listchats,
   '!restartbot': cmd_refresh,
   '!restartbot': cmd_refresh,
-  '!fetchforupdates': cmd_fetchforupdates
+  '!fetchforupdates': cmd_fetchforupdates,
+  '!togglechatgames': cmd_togglechatgames
 };
+
 
 const COMMAND_INFO = {
   '!math': {
@@ -796,8 +818,13 @@ const COMMAND_INFO = {
     description: 'Owner only: Pulls latest code from git',
     format: '!fetchforupdates'
   },
+  '!togglechatgames': {
+    description: 'Owner only: Enables or disables the automatic chat games',
+    format: '!togglechatgames'
+  },
   '!mail': {
     description: 'Sends a message to an offline or online player',
+
     format: '!mail <username> <message>'
   },
   '!readmail': {

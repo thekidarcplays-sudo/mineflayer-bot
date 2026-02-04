@@ -22,7 +22,17 @@ A feature-rich Minecraft bot built with Node.js and **Mineflayer**. This bot inc
 
 This script will automatically restart the bot if it crashes or if you use `!restartbot`.
 
-> Note: By default, it connects to `localhost:25565` as `Bot`. Edit `OPTIONS` in `bot.js` to change the server or username.
+## Configuration
+
+The bot is configured via `config.json`. You can change the server connection, bot owner, and other settings there.
+
+### `config.json` Options:
+- `botOptions`: Server details (`host`, `port`, `username`).
+- `owner`: The Minecraft username of the bot owner (for admin commands).
+- `files`: Paths for data storage (logs, wins, mail, etc.).
+- `game`: Timing settings for the "guess the word" game.
+- `reconnect`: Reconnection policy on disconnect or kick.
+
 
 
 ##  Commands
@@ -38,7 +48,9 @@ This script will automatically restart the bot if it crashes or if you use `!res
 | `!math` | Solve math problems | `!math 2 + 2` |
 | `!forget` | Reset AI memory | `!forget` |
 | `!leaderboard`| Top win counts | `!leaderboard` |
+| `!togglechatgames`| Enable/Disable games | `!togglechatgames`|
 | `!help` | List all commands | `!help` |
+
 
 *...and many more! Try `!help` in-game.*
 

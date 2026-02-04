@@ -1,0 +1,26 @@
+{
+    "botOptions": {
+        "host": "localhost",
+        "port": 25565,
+        "username": "Bot"
+    },
+    "owner": "me144",
+    "files": {
+        "players": "players.json",
+        "curses": "curses.json",
+        "gptCache": "gpt_cache.json",
+        "wins": "wins.json",
+        "mail": "mail.json",
+        "chatLogs": "chat_logs.txt"
+    },
+    "game": {
+        "enabled": true,
+        "minInterval": 300000,
+        "maxInterval": 900000,
+        "winNextRoundDelay": 300000
+    },
+    "reconnect": {
+        "attempts": 5,
+        "delay": 5000
+    }
+}
