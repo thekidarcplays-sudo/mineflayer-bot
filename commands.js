@@ -1,7 +1,6 @@
 const { faker } = require('@faker-js/faker');
 const axios = require('axios');
 const fs = require('fs');
-
 const path = require('path');
 const { exec } = require('child_process');
 let SummarizerManager = require("node-summarizer").SummarizerManager;
@@ -56,39 +55,6 @@ if (fs.existsSync(WINS_FILE)) {
     winsData = JSON.parse(fs.readFileSync(WINS_FILE, 'utf8') || '{}');
   } catch (err) {
     console.error('Failed to load wins data', err);
-  }
-}
-
-
-
-let mailData = {};
-if (fs.existsSync(MAIL_FILE)) {
-  try {
-    mailData = JSON.parse(fs.readFileSync(MAIL_FILE, 'utf8') || '{}');
-  } catch (err) {
-    console.error('Failed to load mail data', err);
-  }
-
-} else {
-  try {
-    fs.writeFileSync(MAIL_FILE, '{}', 'utf8');
-  } catch (err) {
-    console.error('Failed to create mail.json', err);
-  }
-}
-
-function saveMail() {
-  try {
-    fs.writeFileSync(MAIL_FILE, JSON.stringify(mailData, null, 4), 'utf8');
-  } catch (err) {
-    console.error('Failed to write mail.json', err);
-  }
-}
-
-function checkMail(bot, username) {
-  const messages = mailData[username];
-  if (messages && messages.length > 0) {
-    bot.whisper(username, `You have ${messages.length} unread messages! Use !readmail to view them.`);
   }
 }
 async function cmd_math(bot, username, args) {
@@ -686,10 +652,7 @@ const COMMANDS = {
   '!listchats': cmd_listchats,
   '!restartbot': cmd_refresh,
   '!restartbot': cmd_refresh,
-  '!fetchforupdates': cmd_fetchforupdates,
-  '!mail': cmd_mail,
-  '!readmail': cmd_readmail,
-  '!clearmail': cmd_clearmail
+  '!fetchforupdates': cmd_fetchforupdates
 };
 
 const COMMAND_INFO = {
