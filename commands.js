@@ -821,9 +821,20 @@ function trackWin(username) {
   }
 }
 
+/**
+ * Gets the UUID of a player by their username.
+ * @param {object} bot - The Mineflayer bot instance.
+ * @param {string} username - The username of the player.
+ * @returns {string|null} - The UUID of the player, or null if not found.
+ */
+function getPlayerUUID(bot, username) {
+  const player = bot.players[username];
+  return player ? player.uuid : null;
+}
+
 
 if (require.main === module) {
   console.log('I am a module! Use bot.js to run me!')
 }
 
-module.exports = { COMMANDS, trackWin, checkMail }
+module.exports = { COMMANDS, trackWin, checkMail, getPlayerUUID }

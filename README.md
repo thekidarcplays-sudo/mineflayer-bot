@@ -48,5 +48,8 @@ This script will automatically restart the bot if it crashes or if you use `!res
 *   **Whisper**: Whisper the bot anything (that isn't a command) to chat privately with the AI.
 
 ## Contributing
-
-Feel free to add more commands in `commands.js`!
+There are testing tools in the `testing_tools` folder if you dont have Minecraft and still would like to contribute.
+`args` in `bot.js` is a object.
+If you add any new commands add them to the `COMMANDS` object in `bot.js` and `COMMAND_INFO` object in `bot.js`.
+If anything you add makes a new file, add that file to the gitignore.
+If you are saving usernames, don't use it on its own, use the UUID of the player via the getPlayerUUID(bot, username) function.
