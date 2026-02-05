@@ -111,8 +111,9 @@ function startBot() {
       if (username === bot.username) return;
       const timestamp = new Date().toLocaleString();
       const logEntry = `[${timestamp}] ${username}: ${message}\n`;
+      const logFile = path.join(__dirname, config.files.chatLogs);
 
-      fs.appendFile(config.files.chatLogs, logEntry, (err) => {
+      fs.appendFile(logFile, logEntry, (err) => {
         if (err) console.error('Failed to save chat message:', err);
       });
 

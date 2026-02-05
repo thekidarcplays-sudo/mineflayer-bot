@@ -59,6 +59,24 @@ if (fs.existsSync(WINS_FILE)) {
     console.error('Failed to load wins data', err);
   }
 }
+
+// Mail system data
+let mailData = {};
+if (fs.existsSync(MAIL_FILE)) {
+  try {
+    mailData = JSON.parse(fs.readFileSync(MAIL_FILE, 'utf8') || '{}');
+  } catch (err) {
+    console.error('Failed to load mail data', err);
+  }
+}
+
+function saveMail() {
+  try {
+    fs.writeFileSync(MAIL_FILE, JSON.stringify(mailData, null, 4), 'utf8');
+  } catch (err) {
+    console.error('Failed to save mail data', err);
+  }
+}
 async function cmd_math(bot, username, args) {
   const expression = args.join(' ');
   try {
@@ -92,6 +110,38 @@ async function cmd_info(bot, username, args) {
 async function cmd_randomnumber(bot, username, args) {
   const number = Math.floor(Math.random() * 10) + 1;
   bot.whisper(username, `Your random number is: ${number}`);
+}
+
+// Simple 1D Perlin Noise implementation
+const perlin1D = (function () {
+  const p = new Uint8Array(512);
+  const permutation = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) permutation[i] = i;
+  for (let i = 255; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [permutation[i], permutation[j]] = [permutation[j], permutation[i]];
+  }
+  for (let i = 0; i < 512; i++) p[i] = permutation[i % 256];
+
+  const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const lerp = (t, a, b) => a + t * (b - a);
+  const grad = (hash, x) => (hash & 1 ? -x : x);
+
+  return function (x) {
+    const X = Math.floor(x) & 255;
+    x -= Math.floor(x);
+    const u = fade(x);
+    return lerp(u, grad(p[X], x), grad(p[X + 1], x - 1)) * 2;
+  };
+})();
+
+async function cmd_trng(bot, username, args) {
+  const time = Date.now();
+  // Using time as x input, scaled to avoid repeating patterns too quickly
+  const noise = perlin1D(time / 1000);
+  // Normalize noise from [-1, 1] to [0, 100]
+  const normalizedValue = Math.floor(((noise + 1) / 2) * 100);
+  bot.whisper(username, `[TRNG] Result: ${normalizedValue}`);
 }
 
 async function cmd_help(bot, username, args) {
@@ -498,7 +548,8 @@ async function cmd_anime_quote(bot, username) {
 }
 
 async function cmd_ping(bot, username) {
-  bot.whisper(username, bot.player.ping + 'ms');
+  const ping = (bot.player && bot.player.ping !== undefined) ? bot.player.ping : 'Unknown';
+  bot.whisper(username, ping + 'ms');
 };
 
 async function cmd_news(bot, username) {
@@ -617,6 +668,13 @@ async function cmd_clearmail(bot, username, args) {
   bot.whisper(username, 'Mailbox cleared.');
 }
 
+function checkMail(bot, username) {
+  const messages = mailData[username];
+  if (messages && messages.length > 0) {
+    bot.whisper(username, `📬 You have ${messages.length} new mail message(s)! Use !readmail to view them.`);
+  }
+}
+
 async function cmd_togglechatgames(bot, username, args) {
   if (username !== OWNER) {
     bot.whisper(username, '⛔ You do not have permission to use this command.');
@@ -671,9 +729,9 @@ const COMMANDS = {
   '!loadchat': cmd_loadchat,
   '!listchats': cmd_listchats,
   '!restartbot': cmd_refresh,
-  '!restartbot': cmd_refresh,
   '!fetchforupdates': cmd_fetchforupdates,
-  '!togglechatgames': cmd_togglechatgames
+  '!togglechatgames': cmd_togglechatgames,
+  '!trng': cmd_trng
 };
 
 
@@ -834,6 +892,10 @@ const COMMAND_INFO = {
   '!clearmail': {
     description: 'Clears all your messages',
     format: '!clearmail'
+  },
+  '!trng': {
+    description: 'Generates a random number using system time and Perlin noise.',
+    format: '!trng'
   }
 };
 
