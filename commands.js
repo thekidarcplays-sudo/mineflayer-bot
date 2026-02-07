@@ -18,6 +18,10 @@ const CURSES_FILE = path.join(__dirname, config.files.curses);
 const GPT_CACHE_FILE = path.join(__dirname, config.files.gptCache);
 const WINS_FILE = path.join(__dirname, config.files.wins);
 const MAIL_FILE = path.join(__dirname, config.files.mail);
+const BOOKMARKS_FILE = path.join(__dirname, 'bookmarks.json');
+const DEATHS_FILE = path.join(__dirname, config.files.deaths);
+const HOMES_FILE = path.join(__dirname, config.files.homes);
+const TRADES_FILE = path.join(__dirname, config.files.trades);
 
 const OWNER = config.owner;
 
@@ -49,7 +53,12 @@ if (fs.existsSync(GPT_CACHE_FILE)) {
 
 // Store conversation history per user
 // { username: [ { role: 'user'|'bot', text: '...' } ] }
+// { username: [ { role: 'user'|'bot', text: '...' } ] }
 let ConversationHistory = {};
+let LastAIRequest = {
+  global: 0,
+  users: {}
+};
 
 let winsData = {};
 if (fs.existsSync(WINS_FILE)) {
@@ -67,6 +76,41 @@ if (fs.existsSync(MAIL_FILE)) {
     mailData = JSON.parse(fs.readFileSync(MAIL_FILE, 'utf8') || '{}');
   } catch (err) {
     console.error('Failed to load mail data', err);
+  }
+}
+
+// Bookmark system data
+let bookmarksData = {};
+if (fs.existsSync(BOOKMARKS_FILE)) {
+  try {
+    bookmarksData = JSON.parse(fs.readFileSync(BOOKMARKS_FILE, 'utf8') || '{}');
+  } catch (err) {
+    console.error('Failed to load bookmarks data', err);
+  }
+}
+
+let homesData = {};
+if (fs.existsSync(HOMES_FILE)) {
+  try {
+    homesData = JSON.parse(fs.readFileSync(HOMES_FILE, 'utf8') || '{}');
+  } catch (err) {
+    console.error('Failed to load homes data', err);
+  }
+}
+
+function saveHomes() {
+  try {
+    fs.writeFileSync(HOMES_FILE, JSON.stringify(homesData, null, 4), 'utf8');
+  } catch (err) {
+    console.error('Failed to save homes data', err);
+  }
+}
+
+function saveBookmarks() {
+  try {
+    fs.writeFileSync(BOOKMARKS_FILE, JSON.stringify(bookmarksData, null, 4), 'utf8');
+  } catch (err) {
+    console.error('Failed to save bookmarks data', err);
   }
 }
 
@@ -170,47 +214,86 @@ async function cmd_AI(bot, username, args) {
   const prompt = args.join(' ');
   const cacheKey = prompt.toLowerCase();
 
+  // Check Cache first
+  if (AICache[cacheKey]) {
+    bot.whisper(username, AICache[cacheKey]);
+    return;
+  }
+
+  // Rate Limiting
+  const now = Date.now();
+  const userCooldown = config.ai.cooldown || 10000;
+  const globalCooldown = config.ai.globalCooldown || 2000;
+
+  if (now - LastAIRequest.global < globalCooldown) {
+    bot.whisper(username, 'AI is processing another request. Please wait a moment.');
+    return;
+  }
+
+  if (LastAIRequest.users[username] && now - LastAIRequest.users[username] < userCooldown) {
+    const remaining = Math.ceil((userCooldown - (now - LastAIRequest.users[username])) / 1000);
+    bot.whisper(username, `Please wait ${remaining}s before your next AI request.`);
+    return;
+  }
+
   // Initialize history if needed
   if (!ConversationHistory[username]) {
     ConversationHistory[username] = [];
   }
 
   // Build context from history
-  // Format: "User: <msg>\nBot: <msg>\n..."
   let contextParts = [];
-  // Keep last 6 exchanges (12 lines)
   const history = ConversationHistory[username].slice(-12);
 
   for (const entry of history) {
-    // If role is user, label 'User', else 'You' or 'Bot'
     const roleLabel = entry.role === 'user' ? 'User' : 'Assistant';
     contextParts.push(`${roleLabel}: ${entry.text}`);
   }
 
-  // Add current prompt
   contextParts.push(`User: ${prompt}`);
   contextParts.push(`Assistant:`);
 
   const fullPrompt = `You are a helpful Minecraft bot. Answer short and concisely.\n\n${contextParts.join('\n')}`;
-
   const encodedPrompt = encodeURIComponent(fullPrompt);
+
+  LastAIRequest.global = now;
+  LastAIRequest.users[username] = now;
+
   try {
     const res = await axios.get(`https://text.pollinations.ai/text/${encodedPrompt}`);
-    const answer = String(res.data).slice(0, 300); // 300 chars max for chat
+    const answer = String(res.data).slice(0, 300);
+
+    // Update Cache
+    AICache[cacheKey] = answer;
+    try {
+      fs.writeFileSync(GPT_CACHE_FILE, JSON.stringify(AICache, null, 2), 'utf8');
+    } catch (err) {
+      console.error('Failed to save GPT cache', err);
+    }
 
     // Update history
     ConversationHistory[username].push({ role: 'user', text: prompt });
     ConversationHistory[username].push({ role: 'bot', text: answer });
 
-    // Prune history to keep it manageable (max 20 items = 10 turns)
     if (ConversationHistory[username].length > 20) {
       ConversationHistory[username] = ConversationHistory[username].slice(-20);
     }
 
     bot.whisper(username, answer);
   } catch (err) {
-    console.error('cmd_ai error', err?.message || err);
-    bot.whisper(username, 'Failed to fetch AI response.');
+    if (err.response) {
+      const status = err.response.status;
+      if (status === 429) {
+        bot.whisper(username, 'The AI is currently overloaded. Please try again later.');
+      } else if (status >= 500 && status <= 504) {
+        bot.whisper(username, `The AI service is currently unavailable (Error ${status}). Try again in a minute.`);
+      } else {
+        bot.whisper(username, `AI Error (${status}). Please try again later.`);
+      }
+    } else {
+      console.error('cmd_ai error', err?.message || err);
+      bot.whisper(username, 'Failed to fetch AI response.');
+    }
   }
 }
 
@@ -692,6 +775,335 @@ async function cmd_togglechatgames(bot, username, args) {
   }
 }
 
+async function cmd_inventory(bot, username, args) {
+  const items = bot.inventory.items();
+  if (items.length === 0) {
+    bot.whisper(username, 'My inventory is empty.');
+    return;
+  }
+  const output = items.map(item => `${item.name} x${item.count}`).join(', ');
+  bot.whisper(username, `Inventory: ${output}`);
+}
+
+async function cmd_stats(bot, username, args) {
+  const health = Math.round(bot.health);
+  const food = Math.round(bot.food);
+  const xp = bot.experience.points;
+  bot.whisper(username, `Stats - Health: ${health}/20, Food: ${food}/20, XP: ${xp}`);
+}
+
+async function cmd_coords(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ This is an owner-only command to prevent base leaks.');
+    return;
+  }
+  const { x, y, z } = bot.entity.position;
+  bot.whisper(username, `Current coords: ${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}`);
+}
+
+async function cmd_drop(bot, username, args) {
+  const item = bot.heldItem;
+  if (!item) {
+    bot.whisper(username, 'I am not holding anything.');
+    return;
+  }
+  try {
+    await bot.tossStack(item);
+    bot.whisper(username, `Dropped ${item.name}.`);
+  } catch (err) {
+    bot.whisper(username, 'Failed to drop item.');
+  }
+}
+
+async function cmd_hand(bot, username, args) {
+  const item = bot.heldItem;
+  if (!item) {
+    bot.whisper(username, 'I am not holding anything.');
+  } else {
+    bot.whisper(username, `I am holding ${item.name}.`);
+  }
+}
+
+async function cmd_near(bot, username, args) {
+  const nearby = Object.values(bot.entities)
+    .filter(e => e !== bot.entity && bot.entity.position.distanceTo(e.position) < 16)
+    .map(e => (e.username || e.displayName || e.name || 'Unknown entity'));
+
+  if (nearby.length === 0) {
+    bot.whisper(username, 'No one nearby.');
+  } else {
+    bot.whisper(username, `Nearby: ${nearby.join(', ')}`);
+  }
+}
+
+async function cmd_bookmark(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ This is an owner-only command.');
+    return;
+  }
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Usage: !bookmark <name>');
+    return;
+  }
+  const name = args[0];
+  bookmarksData[name] = bot.entity.position;
+  saveBookmarks();
+  bot.whisper(username, `Bookmark "${name}" saved!`);
+}
+
+async function cmd_goto(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ This is an owner-only command.');
+    return;
+  }
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Usage: !goto <bookmark_name>');
+    return;
+  }
+  const name = args[0];
+  const pos = bookmarksData[name];
+  if (!pos) {
+    bot.whisper(username, `Bookmark "${name}" not found.`);
+    return;
+  }
+  bot.chat(`Navigating to bookmark: ${name}`);
+  const defaultMove = new Movements(bot);
+  bot.pathfinder.setMovements(defaultMove);
+  bot.pathfinder.setGoal(new goals.GoalBlock(pos.x, pos.y, pos.z));
+}
+
+async function cmd_players(bot, username, args) {
+  const playerNames = Object.keys(bot.players);
+  bot.whisper(username, `Online players: ${playerNames.join(', ')}`);
+}
+
+async function cmd_log(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ This is an owner-only command.');
+    return;
+  }
+  const logFile = path.join(__dirname, config.files.chatLogs);
+  try {
+    const data = fs.readFileSync(logFile, 'utf8');
+    const lines = data.split('\n').filter(l => l.trim()).slice(-5);
+    bot.whisper(username, '--- Last 5 logs ---');
+    lines.forEach(l => bot.whisper(username, l));
+  } catch (err) {
+    bot.whisper(username, 'Failed to read logs.');
+  }
+}
+
+let protectTarget = null;
+async function cmd_protect(bot, username, args) {
+  if (!args || args.length === 0) {
+    protectTarget = null;
+    bot.pvp.stop();
+    bot.pathfinder.setGoal(null);
+    bot.chat('Protection mode disabled.');
+    return;
+  }
+  const name = args[0];
+  const player = bot.players[name];
+  if (!player || !player.entity) {
+    bot.whisper(username, `I can't see ${name}.`);
+    return;
+  }
+  protectTarget = name;
+  bot.chat(`Protecting ${name}!`);
+
+  const defaultMove = new Movements(bot);
+  bot.pathfinder.setMovements(defaultMove);
+  bot.pathfinder.setGoal(new goals.GoalFollow(player.entity, 2), true);
+}
+
+// In bot.js entityHurt is already defined, but for protection we might need extra logic
+// Let's refine the cmd_protect logic in a follow-up if needed, 
+// for now this sets the goal to follow.
+
+async function cmd_clearwins(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ This is an owner-only command.');
+    return;
+  }
+  winsData = {};
+  try {
+    fs.writeFileSync(WINS_FILE, JSON.stringify(winsData, null, 4), 'utf8');
+    bot.chat('🏆 Wins leaderboard has been cleared by the owner.');
+  } catch (err) {
+    bot.whisper(username, 'Failed to clear wins.');
+  }
+}
+
+async function cmd_broadcast(bot, username, args) {
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Usage: !broadcast <message>');
+    return;
+  }
+  const msg = args.join(' ').toUpperCase();
+  bot.chat(`📢 BROADCAST: ${msg}`);
+}
+
+async function cmd_mine(bot, username, args) {
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Usage: !mine <block_name> [count]');
+    return;
+  }
+  const blockName = args[0];
+  const count = parseInt(args[1]) || 1;
+  const mcData = require('minecraft-data')(bot.version);
+  const blockType = mcData.blocksByName[blockName];
+
+  if (!blockType) {
+    bot.whisper(username, `I don't know what "${blockName}" is.`);
+    return;
+  }
+
+  const blocks = bot.findBlocks({
+    matching: blockType.id,
+    maxDistance: 64,
+    count: count
+  });
+
+  if (blocks.length === 0) {
+    bot.whisper(username, `I couldn't find any ${blockName} nearby.`);
+    return;
+  }
+
+  bot.chat(`⛏️ Mining ${blocks.length} ${blockName}...`);
+  try {
+    await bot.collectBlock.collect(bot.findBlock({ matching: blockType.id, maxDistance: 64 }));
+    bot.chat(`✅ Finished mining ${blockName}.`);
+  } catch (err) {
+    console.error('Mining error', err);
+    bot.whisper(username, 'Failed to mine blocks.');
+  }
+}
+
+async function cmd_sethome(bot, username, args) {
+  homesData[username] = bot.entity.position;
+  saveHomes();
+  bot.whisper(username, '🏠 Home set! Use !home to see your coordinates.');
+}
+
+async function cmd_home(bot, username, args) {
+  const pos = homesData[username];
+  if (!pos) {
+    bot.whisper(username, "You haven't set a home yet. Use !sethome.");
+    return;
+  }
+  bot.whisper(username, `📍 Your home is at: ${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`);
+}
+
+async function cmd_delhome(bot, username, args) {
+  if (homesData[username]) {
+    delete homesData[username];
+    saveHomes();
+    bot.whisper(username, '🏠 Home deleted.');
+  } else {
+    bot.whisper(username, 'You have no home to delete.');
+  }
+}
+
+async function cmd_trash(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ This is an owner-only command.');
+    return;
+  }
+  const items = bot.inventory.items();
+  if (items.length === 0) {
+    bot.whisper(username, 'Inventory is empty.');
+    return;
+  }
+
+  bot.chat('🗑️ Clearing inventory...');
+  for (const item of items) {
+    await bot.tossStack(item);
+  }
+  bot.chat('✅ Inventory cleared.');
+}
+
+async function cmd_seen(bot, username, args) {
+  if (!args || args.length === 0) {
+    bot.whisper(username, 'Usage: !seen <player>');
+    return;
+  }
+  const target = args[0];
+  const player = bot.players[target];
+  if (player) {
+    bot.whisper(username, `${target} is currently online!`);
+    return;
+  }
+
+  // Check players.json (assumed to be updated on join/leave)
+  // For now, let's just check if we have data for them
+  let data = {};
+  const DATA_FILE = path.join(__dirname, config.files.players);
+  if (fs.existsSync(DATA_FILE)) {
+    try { data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '{}'); } catch (e) { }
+  }
+
+  if (data[target]) {
+    bot.whisper(username, `${target} was last seen on this server (Login count: ${data[target]}).`);
+  } else {
+    bot.whisper(username, `I haven't seen ${target} before.`);
+  }
+}
+
+let guardPos = null;
+async function cmd_guard(bot, username, args) {
+  if (username !== OWNER) {
+    bot.whisper(username, '⛔ This is an owner-only command.');
+    return;
+  }
+  if (guardPos) {
+    guardPos = null;
+    bot.pvp.stop();
+    bot.pathfinder.setGoal(null);
+    bot.chat('🛡️ Guard mode disabled.');
+  } else {
+    guardPos = bot.entity.position.clone();
+    bot.chat(`🛡️ Guarding this area within ${config.guard.radius} blocks.`);
+    // Setup guard routine
+    const guardInterval = setInterval(() => {
+      if (!guardPos) {
+        clearInterval(guardInterval);
+        return;
+      }
+
+      const target = bot.nearestEntity(e =>
+        (e.type === 'mob' && config.guard.attackMobs) ||
+        (e.type === 'player' && config.guard.attackPlayers && e.username !== OWNER)
+      );
+
+      if (target && target.position.distanceTo(guardPos) < config.guard.radius) {
+        bot.pvp.attack(target);
+      } else if (bot.entity.position.distanceTo(guardPos) > 2) {
+        bot.pathfinder.setGoal(new goals.GoalBlock(guardPos.x, guardPos.y, guardPos.z));
+      }
+    }, 1000);
+  }
+}
+
+async function cmd_status(bot, username, args) {
+  let status = 'Idle';
+  if (bot.pathfinder.goal) status = 'Moving / Pathfinder active';
+  if (bot.pvp.target) status = `In combat with ${bot.pvp.target.username || bot.pvp.target.displayName || 'entity'}`;
+  if (guardPos) status = 'Guarding area';
+
+  const health = Math.round(bot.health);
+  const food = Math.round(bot.food);
+  bot.whisper(username, `🤖 Bot Status: ${status} | ❤️ Health: ${health}/20 | 🍖 Food: ${food}/20`);
+}
+
+async function cmd_exchange(bot, username, args) {
+  const trades = config.exchange.trades;
+  bot.whisper(username, '--- 🔄 Current Trade Rates ---');
+  for (const [item, data] of Object.entries(trades)) {
+    bot.whisper(username, `${item} -> ${data.count}x ${data.reward}`);
+  }
+  bot.whisper(username, 'Drop the items to me to begin trading!');
+}
+
 
 const COMMANDS = {
   '!math': cmd_math,
@@ -731,7 +1143,30 @@ const COMMANDS = {
   '!restartbot': cmd_refresh,
   '!fetchforupdates': cmd_fetchforupdates,
   '!togglechatgames': cmd_togglechatgames,
-  '!trng': cmd_trng
+  '!trng': cmd_trng,
+  '!inventory': cmd_inventory,
+  '!stats': cmd_stats,
+  '!coords': cmd_coords,
+  '!drop': cmd_drop,
+  '!hand': cmd_hand,
+  '!near': cmd_near,
+  '!bookmark': cmd_bookmark,
+  '!goto': cmd_goto,
+  '!players': cmd_players,
+  '!log': cmd_log,
+  '!protect': cmd_protect,
+  '!clearwins': cmd_clearwins,
+  '!broadcast': cmd_broadcast,
+  '!mine': cmd_mine,
+  '!sethome': cmd_sethome,
+  '!home': cmd_home,
+  '!delhome': cmd_delhome,
+  '!trash': cmd_trash,
+  '!seen': cmd_seen,
+  '!guard': cmd_guard,
+  '!status': cmd_status,
+  '!exchange': cmd_exchange,
+  '!autoeat': (bot, username) => { } // already handled in bot.js but added here for help visibility
 };
 
 
@@ -795,6 +1230,46 @@ const COMMAND_INFO = {
   '!wiki': {
     description: 'Gets the wikipidia page for a word.',
     format: '!wiki [word]'
+  },
+  '!mine': {
+    description: 'Mines a specific block nearby.',
+    format: '!mine <block> [count]'
+  },
+  '!sethome': {
+    description: 'Sets your current location as your home.',
+    format: '!sethome'
+  },
+  '!home': {
+    description: 'Whispers your home coordinates to you.',
+    format: '!home'
+  },
+  '!delhome': {
+    description: 'Deletes your saved home.',
+    format: '!delhome'
+  },
+  '!trash': {
+    description: 'Owner only: Drops all items in inventory.',
+    format: '!trash'
+  },
+  '!seen': {
+    description: 'Shows when a player was last online.',
+    format: '!seen <player>'
+  },
+  '!guard': {
+    description: 'Owner only: Guards the current area.',
+    format: '!guard'
+  },
+  '!status': {
+    description: 'Shows the bot\'s current activity and stats.',
+    format: '!status'
+  },
+  '!exchange': {
+    description: 'Shows the current trade rates for item exchange.',
+    format: '!exchange'
+  },
+  '!autoeat': {
+    description: 'Toggles automatic eating.',
+    format: '!autoeat'
   },
   '!randomword': {
     description: 'Generates a random word',
@@ -896,6 +1371,62 @@ const COMMAND_INFO = {
   '!trng': {
     description: 'Generates a random number using system time and Perlin noise.',
     format: '!trng'
+  },
+  '!inventory': {
+    description: 'Shows your inventory items.',
+    format: '!inventory'
+  },
+  '!stats': {
+    description: 'Shows health, hunger, and XP.',
+    format: '!stats'
+  },
+  '!coords': {
+    description: 'Owner only: Shows current coordinates.',
+    format: '!coords'
+  },
+  '!drop': {
+    description: 'Drops the item in hand.',
+    format: '!drop'
+  },
+  '!hand': {
+    description: 'Identifies the item in hand.',
+    format: '!hand'
+  },
+  '!near': {
+    description: 'Lists nearby entities.',
+    format: '!near'
+  },
+  '!bookmark': {
+    description: 'Owner only: Saves a named coordinate.',
+    format: '!bookmark <name>'
+  },
+  '!goto': {
+    description: 'Owner only: Travels to a bookmark.',
+    format: '!goto <name>'
+  },
+  '!players': {
+    description: 'Lists online players.',
+    format: '!players'
+  },
+  '!log': {
+    description: 'Owner only: Shows recent chat logs.',
+    format: '!log'
+  },
+  '!protect': {
+    description: 'Follows and protects a player.',
+    format: '!protect <name>'
+  },
+  '!clearwins': {
+    description: 'Owner only: Resets the wins leaderboard.',
+    format: '!clearwins'
+  },
+  '!broadcast': {
+    description: 'Sends a shouting broadcast message.',
+    format: '!broadcast <message>'
+  },
+  '!autoeat': {
+    description: 'Toggles automatic eating.',
+    format: '!autoeat'
   }
 };
 

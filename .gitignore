@@ -8,3 +8,7 @@ wins.json
 chat_logs.txt
 mail.json
 chats/*.json
+bookmarks.json
+deaths.json
+homes.json
+trades.json

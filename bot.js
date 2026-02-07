@@ -3,6 +3,8 @@ const path = require('path');
 const mineflayer = require('mineflayer');
 const { pathfinder } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
+const collectBlock = require('mineflayer-collectblock').plugin;
+require('mineflayer-death-event')(mineflayer);
 const Filter = require('bad-words');
 const filter = new Filter();
 const { COMMANDS, trackWin, checkMail } = require('./commands');
@@ -19,6 +21,20 @@ let rejoinAttempts = 0;
 let gameWord = null;
 let gameActive = false;
 let gameTimer = null;
+let autoEatEnabled = true;
+
+function checkAutoEat(bot) {
+  if (!autoEatEnabled) return;
+  if (bot.food < 18) {
+    const food = bot.inventory.items().find(item => item.name in config.foodItems || [
+      'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_rabbit', 'cooked_cod', 'cooked_salmon', 'bread', 'apple', 'golden_apple', 'enchanted_golden_apple', 'carrot', 'baked_potato'
+    ].includes(item.name));
+
+    if (food) {
+      bot.eat(food).catch(err => console.error('Failed to eat', err));
+    }
+  }
+}
 
 function getRandomInterval() {
   // Configurable interval
@@ -97,6 +113,7 @@ function startBot() {
   const bot = mineflayer.createBot(OPTIONS);
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
+  bot.loadPlugin(collectBlock);
 
   bot.once('spawn', () => {
     console.log(`${OPTIONS.username} spawned.`);
@@ -143,6 +160,11 @@ function startBot() {
         const args = parts.slice(1);
         const fn = COMMANDS[command];
         if (fn) {
+          if (command === '!autoeat') {
+            autoEatEnabled = !autoEatEnabled;
+            bot.whisper(username, `Auto-eat is now ${autoEatEnabled ? 'enabled' : 'disabled'}.`);
+            return;
+          }
           const res = fn(bot, username, args);
           if (res && typeof res.then === 'function') {
             res.catch(err => {
@@ -239,9 +261,67 @@ function startBot() {
     console.error('Bot error', err);
   });
 
+  bot.on('playerCollect', (collector, itemEntity) => {
+    if (collector !== bot.entity) return;
+    if (!config.exchange.enabled) return;
+
+    // Use the registry to get item names from IDs
+    const itemMetadata = itemEntity.metadata.find(m => m && typeof m === 'object' && m.present !== undefined);
+    if (!itemMetadata) return;
+
+    const itemName = bot.registry.items[itemMetadata.itemId]?.name;
+    if (!itemName) return;
+
+    const trade = config.exchange.trades[itemName];
+    if (trade) {
+      const rewardName = trade.reward;
+      const count = trade.count;
+      bot.chat(`🔄 Received ${itemName}. Exchanging for ${count}x ${rewardName}...`);
+
+      const rewardItem = bot.inventory.items().find(i => i.name === rewardName);
+      if (rewardItem) {
+        bot.toss(rewardItem.type, null, count).catch(err => {
+          console.error('Exchange toss error', err);
+        });
+      } else {
+        bot.chat(`❌ I don't have enough ${rewardName} to complete the trade!`);
+      }
+    }
+  });
+
+  bot.on('death', () => {
+    const timestamp = new Date().toLocaleString();
+    const deathEntry = { timestamp, username: bot.username, location: bot.entity.position };
+    const deathsFile = path.join(__dirname, config.files.deaths);
+
+    let deaths = [];
+    if (fs.existsSync(deathsFile)) {
+      try { deaths = JSON.parse(fs.readFileSync(deathsFile, 'utf8') || '[]'); } catch (e) { }
+    }
+    deaths.push(deathEntry);
+    fs.writeFileSync(deathsFile, JSON.stringify(deaths, null, 2));
+  });
+
+  bot.on('playerDeath', (data) => {
+    const timestamp = new Date().toLocaleString();
+    const deathEntry = { timestamp, ...data };
+    const deathsFile = path.join(__dirname, config.files.deaths);
+
+    let deaths = [];
+    if (fs.existsSync(deathsFile)) {
+      try { deaths = JSON.parse(fs.readFileSync(deathsFile, 'utf8') || '[]'); } catch (e) { }
+    }
+    deaths.push(deathEntry);
+    fs.writeFileSync(deathsFile, JSON.stringify(deaths, null, 2));
+  });
+
   bot.on('end', () => {
     console.log(`Bot disconnected. Reconnecting in ${config.reconnect.delay / 1000}s...`);
     setTimeout(() => startBot(), config.reconnect.delay);
+  });
+
+  bot.on('health', () => {
+    checkAutoEat(bot);
   });
 
   return bot;

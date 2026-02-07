@@ -11,7 +11,10 @@
         "gptCache": "gpt_cache.json",
         "wins": "wins.json",
         "mail": "mail.json",
-        "chatLogs": "chat_logs.txt"
+        "chatLogs": "chat_logs.txt",
+        "deaths": "deaths.json",
+        "homes": "homes.json",
+        "trades": "trades.json"
     },
     "game": {
         "enabled": true,
@@ -22,5 +25,27 @@
     "reconnect": {
         "attempts": 5,
         "delay": 5000
+    },
+    "ai": {
+        "cooldown": 10000,
+        "globalCooldown": 2000
+    },
+    "guard": {
+        "radius": 10,
+        "attackMobs": true,
+        "attackPlayers": false
+    },
+    "exchange": {
+        "enabled": true,
+        "trades": {
+            "diamond": {
+                "reward": "gold_ingot",
+                "count": 2
+            },
+            "iron_ingot": {
+                "reward": "coal",
+                "count": 4
+            }
+        }
     }
 }
