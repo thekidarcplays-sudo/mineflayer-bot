@@ -23,6 +23,7 @@ async function cmd_help(bot, username, args) {
   } else {
     const cmds = Object.keys(COMMANDS).sort();
     bot.whisper(username, 'Available: ' + cmds.join(', '));
+    bot.whisper(username, "Type !help [command] for more info.");
   }
 }
 

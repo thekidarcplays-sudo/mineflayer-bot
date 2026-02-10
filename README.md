@@ -85,8 +85,9 @@ The bot is configured via `config.json`. You can change the server connection, b
 *   **Whisper**: Whisper the bot anything (that isn't a command) to chat privately with the AI.
 
 ## Contributing
-There are testing tools in the `testing_tools` folder if you don't have Minecraft and still would like to contribute or if you don't want to open Minecraft.
-`args` in `commands.js` is a object.
-If you add any new commands, add them to the `COMMANDS` object in `commands.js` and `COMMAND_INFO` object in `commands.js`6.  If anything you add makes a new file, add that file to the gitignore.
+3. There are testing tools in the `testing_tools` folder if you don't have Minecraft and still would like to contribute or if you don't want to open Minecraft.
+4. `args` is a object.
+5. If you add any new commands, make sure they are exported and have a description in `commands.js` in the `COMMAND_INFO` list.
+6.  If anything you add makes a new file, add that file to the gitignore.
 7.  If you are saving usernames, don't use it on its own, use the UUID of the player via the getPlayerUUID(bot, username) function.
 8.  For bookmarks/coordinate systems, restrict access to the bot owner to prevent base leaks.
