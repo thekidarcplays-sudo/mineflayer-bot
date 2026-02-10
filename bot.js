@@ -4,10 +4,11 @@ const mineflayer = require('mineflayer');
 const { pathfinder } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
 const collectBlock = require('mineflayer-collectblock').plugin;
-require('mineflayer-death-event')(mineflayer);
+const { deathEventPlugin } = require('mineflayer-death-event');
 const Filter = require('bad-words');
 const filter = new Filter();
 const { COMMANDS, trackWin, checkMail } = require('./commands');
+const db = require('./database');
 const { faker } = require('@faker-js/faker');
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
@@ -62,58 +63,14 @@ function startGameRound(bot) {
   }, getRandomInterval());
 }
 
-function getNewGameWord() {
-  gameWord = faker.hacker.noun()[0];
-  return gameWord;
-}
-
-function trackCurse(username) {
-  let data = {};
-  if (fs.existsSync(CURSES_FILE)) {
-    try {
-      data = JSON.parse(fs.readFileSync(CURSES_FILE, 'utf8') || '{}');
-    } catch (err) { }
-  }
-
-  const count = (data[username] || 0) + 1;
-  data[username] = count;
-
-  try {
-    fs.writeFileSync(CURSES_FILE, JSON.stringify(data, null, 4), 'utf8');
-  } catch (err) {
-    console.error('Failed to write curses.json', err);
-  }
-}
-
-function updatePlayerCount(username, bot) {
-  let data = {};
-  if (fs.existsSync(DATA_FILE)) {
-    try {
-      data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8') || '{}');
-    } catch (err) { }
-  }
-
-  const count = (data[username] || 0) + 1;
-  data[username] = count;
-
-  if (count === 1) {
-    bot.chat(`Hello ${username} and welcome to the server!`);
-  } else {
-    bot.chat(`Welcome back ${username}! Join count: ${count}`);
-  }
-
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 4), 'utf8');
-  } catch (err) {
-    console.error('Failed to write players.json', err);
-  }
-}
+// trackCurse and updatePlayerCount are now in database.js
 
 function startBot() {
   const bot = mineflayer.createBot(OPTIONS);
   bot.loadPlugin(pathfinder);
   bot.loadPlugin(pvp);
   bot.loadPlugin(collectBlock);
+  bot.loadPlugin(deathEventPlugin);
 
   bot.once('spawn', () => {
     console.log(`${OPTIONS.username} spawned.`);
@@ -126,17 +83,11 @@ function startBot() {
   bot.on('chat', (username, message) => {
     try {
       if (username === bot.username) return;
-      const timestamp = new Date().toLocaleString();
-      const logEntry = `[${timestamp}] ${username}: ${message}\n`;
-      const logFile = path.join(__dirname, config.files.chatLogs);
-
-      fs.appendFile(logFile, logEntry, (err) => {
-        if (err) console.error('Failed to save chat message:', err);
-      });
+      db.chat.log(username, message);
 
       const isProfane = filter.isProfane(message);
       if (isProfane) {
-        trackCurse(username);
+        db.curses.track(username);
         bot.whisper(username, 'Please avoid using profanity.');
         // still process command if starts with '!'
         if (!message.startsWith('!')) return;
@@ -233,14 +184,18 @@ function startBot() {
   bot.on('playerJoined', player => {
     const name = (player && player.username) ? player.username : player;
     if (name && name !== bot.username) {
-      updatePlayerCount(name, bot);
+      const count = db.players.incrementJoin(name);
+      if (count === 1) bot.chat(`Hello ${name} and welcome!`);
+      else bot.chat(`Welcome back ${name}! Join count: ${count}`);
       checkMail(bot, name);
     }
   });
   bot.on('playerJoin', player => {
     const name = (player && player.username) ? player.username : player;
     if (name && name !== bot.username) {
-      updatePlayerCount(name, bot);
+      const count = db.players.incrementJoin(name);
+      if (count === 1) bot.chat(`Hello ${name} and welcome!`);
+      else bot.chat(`Welcome back ${name}! Join count: ${count}`);
       checkMail(bot, name);
     }
   });
@@ -290,29 +245,18 @@ function startBot() {
   });
 
   bot.on('death', () => {
-    const timestamp = new Date().toLocaleString();
-    const deathEntry = { timestamp, username: bot.username, location: bot.entity.position };
-    const deathsFile = path.join(__dirname, config.files.deaths);
-
-    let deaths = [];
-    if (fs.existsSync(deathsFile)) {
-      try { deaths = JSON.parse(fs.readFileSync(deathsFile, 'utf8') || '[]'); } catch (e) { }
-    }
-    deaths.push(deathEntry);
-    fs.writeFileSync(deathsFile, JSON.stringify(deaths, null, 2));
+    db.deaths.add({
+      timestamp: new Date().toLocaleString(),
+      username: bot.username,
+      location: bot.entity.position
+    });
   });
 
   bot.on('playerDeath', (data) => {
-    const timestamp = new Date().toLocaleString();
-    const deathEntry = { timestamp, ...data };
-    const deathsFile = path.join(__dirname, config.files.deaths);
-
-    let deaths = [];
-    if (fs.existsSync(deathsFile)) {
-      try { deaths = JSON.parse(fs.readFileSync(deathsFile, 'utf8') || '[]'); } catch (e) { }
-    }
-    deaths.push(deathEntry);
-    fs.writeFileSync(deathsFile, JSON.stringify(deaths, null, 2));
+    db.deaths.add({
+      timestamp: new Date().toLocaleString(),
+      ...data
+    });
   });
 
   bot.on('end', () => {
