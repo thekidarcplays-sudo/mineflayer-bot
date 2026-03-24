@@ -27,9 +27,13 @@ let autoEatEnabled = true;
 function checkAutoEat(bot) {
   if (!autoEatEnabled) return;
   if (bot.food < 18) {
-    const food = bot.inventory.items().find(item => item.name in config.foodItems || [
-      'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton', 'cooked_rabbit', 'cooked_cod', 'cooked_salmon', 'bread', 'apple', 'golden_apple', 'enchanted_golden_apple', 'carrot', 'baked_potato'
-    ].includes(item.name));
+    const defaultFoods = [
+      'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton',
+      'cooked_rabbit', 'cooked_cod', 'cooked_salmon', 'bread', 'apple',
+      'golden_apple', 'enchanted_golden_apple', 'carrot', 'baked_potato'
+    ];
+    const foodList = config.foodItems || defaultFoods;
+    const food = bot.inventory.items().find(item => foodList.includes(item.name));
 
     if (food) {
       bot.eat(food).catch(err => console.error('Failed to eat', err));
@@ -190,14 +194,9 @@ function startBot() {
       checkMail(bot, name);
     }
   });
+  // 'playerJoin' is an alias used by some versions; guard against double-firing
   bot.on('playerJoin', player => {
-    const name = (player && player.username) ? player.username : player;
-    if (name && name !== bot.username) {
-      const count = db.players.incrementJoin(name);
-      if (count === 1) bot.chat(`Hello ${name} and welcome!`);
-      else bot.chat(`Welcome back ${name}! Join count: ${count}`);
-      checkMail(bot, name);
-    }
+    // Handled by 'playerJoined' above -- no-op to avoid duplicate counting
   });
 
   bot.on('kicked', (reason) => {
