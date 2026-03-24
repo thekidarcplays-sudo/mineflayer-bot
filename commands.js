@@ -236,7 +236,6 @@ const COMMAND_INFO = {
   '!randomsentence': { description: 'Generates a random sentence.', format: '!randomsentence' },
   '!randomnumber': { description: 'Generates a random number 1-10.', format: '!randomnumber' },
   '!trng': { description: 'Generates a Perlin noise-based random number.', format: '!trng' },
-  '!food': { description: 'Searches OpenFoodFacts for a product.', format: '!food <product>' },
   '!wikipedia': { description: 'Gets Wikipedia page info (alias for !wiki).', format: '!wikipedia <topic>' }
 };
 
