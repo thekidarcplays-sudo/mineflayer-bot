@@ -6,6 +6,7 @@
     "mathjs": "^15.1.0",
     "minecraft-data": "^3.102.3",
     "mineflayer": "^4.33.0",
+    "node-fetch": "^2.7.0",
     "mineflayer-collectblock": "^1.6.0",
     "mineflayer-death-event": "^2.0.0",
     "mineflayer-pathfinder": "^2.4.5",
