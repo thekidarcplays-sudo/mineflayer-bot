@@ -87,6 +87,12 @@ The bot is configured via `config.json`. You can change the server connection, b
 | `!choose` | Picks a random option | `!choose <a, b, c>` |
 | `!define` | Word definition | `!define <word>` |
 | `!quote` | Random inspirational quote | `!quote` |
+| `!look` | Bot looks at a player | `!look [player]` |
+| `!jump` | Bot jumps once | `!jump` |
+| `!hunt` | Attacks nearest hostile mob | `!hunt [mob]` |
+| `!eat` | Eats food from inventory | `!eat` |
+| `!distance` | Distance to a player | `!distance [player]` |
+| `!whereis` | Player coords (Owner) | `!whereis <player>` |
 
 
 *...and many more! Try `!help` in-game.*
