@@ -38,7 +38,7 @@ function cmd_guard(bot, username, args, config) {
         const target = bot.nearestEntity(e => {
             if (e === bot.entity) return false;
             if (e.position.distanceTo(guardState.pos) > radius) return false;
-            if (attackMobs && e.type === 'mob' && e.kind === 'Hostile mobs') return true;
+            if (attackMobs && e.kind === 'Hostile mobs') return true;
             if (attackPlayers && e.type === 'player' && e.username !== bot.username) return true;
             return false;
         });
@@ -259,7 +259,7 @@ function cmd_hunt(bot, username, args) {
     const typeName = (args && args[0]) ? args[0].toLowerCase() : null;
     const target = bot.nearestEntity(e => {
         if (e === bot.entity) return false;
-        if (e.type !== 'mob' || e.kind !== 'Hostile mobs') return false;
+        if (e.kind !== 'Hostile mobs') return false;
         if (e.position.distanceTo(bot.entity.position) > 16) return false;
         if (typeName && !(e.name || e.displayName || '').toLowerCase().includes(typeName)) return false;
         return true;

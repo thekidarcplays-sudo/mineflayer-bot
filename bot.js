@@ -172,7 +172,7 @@ function startBot() {
 
     // Find the nearest attacker (player or mob) within 4 blocks
     const attacker = bot.nearestEntity(e =>
-      (e.type === 'player' || e.type === 'mob') &&
+      (e.type === 'player' || (e.kind && e.kind.endsWith('mobs'))) &&
       e.position.distanceTo(bot.entity.position) < 4 &&
       e !== bot.entity
     );
