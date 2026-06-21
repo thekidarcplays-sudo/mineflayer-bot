@@ -129,6 +129,10 @@ const COMMANDS = {
   },
   '!mine': act.mine,
   '!protect': act.protect,
+  '!guard': (bot, username, args) => {
+    if (username !== OWNER) return;
+    act.guard(bot, username, args, config);
+  },
   '!trash': (bot, username) => {
     if (username !== OWNER) return;
     bot.inventory.items().forEach(item => bot.tossStack(item));
@@ -145,6 +149,11 @@ const COMMANDS = {
   '!near': svc.near,
   '!players': svc.players,
   '!broadcast': svc.broadcast,
+  '!coinflip': svc.coinflip,
+  '!roll': svc.roll,
+  '!8ball': svc.eightball,
+  '!time': svc.time,
+  '!uptime': svc.uptime,
   '!bookmark': (bot, username, args) => {
     if (username !== OWNER || !args[0]) return;
     db.bookmarks.set(args[0], bot.entity.position);
@@ -223,6 +232,12 @@ const COMMAND_INFO = {
   '!near': { description: 'Lists nearby entities.', format: '!near' },
   '!players': { description: 'Lists online players.', format: '!players' },
   '!broadcast': { description: 'Sends a shouting message in chat.', format: '!broadcast <message>' },
+  '!guard': { description: 'Owner only: Guards the current area, attacking hostiles within range.', format: '!guard' },
+  '!coinflip': { description: 'Flips a coin (Heads or Tails).', format: '!coinflip' },
+  '!roll': { description: 'Rolls dice. Supports !roll <sides> or !roll <count>d<sides>.', format: '!roll [sides|NdM]' },
+  '!8ball': { description: 'Answers a yes/no question, Magic 8-Ball style.', format: '!8ball <question>' },
+  '!time': { description: 'Shows the in-game time (day/night).', format: '!time' },
+  '!uptime': { description: 'Shows how long the bot has been running.', format: '!uptime' },
   '!log': { description: 'Owner only: Shows recent chat logs.', format: '!log' },
   '!newchat': { description: 'Starts a fresh AI conversation.', format: '!newchat' },
   '!savechat': { description: 'Saves current AI conversation.', format: '!savechat <name>' },
