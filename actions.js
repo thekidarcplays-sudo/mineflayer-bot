@@ -1,5 +1,56 @@
 const { goals, Movements } = require('mineflayer-pathfinder');
 
+let guardState = { active: false, pos: null, interval: null };
+
+function stopGuard(bot) {
+    if (guardState.interval) clearInterval(guardState.interval);
+    guardState = { active: false, pos: null, interval: null };
+    try {
+        bot.pvp.stop();
+        bot.pathfinder.setGoal(null);
+    } catch (err) {
+        console.error('stopGuard error', err);
+    }
+}
+
+function cmd_guard(bot, username, args, config) {
+    if (guardState.active) {
+        stopGuard(bot);
+        bot.chat('🛡️ Guard mode disabled.');
+        return;
+    }
+    const gcfg = (config && config.guard) || {};
+    const radius = gcfg.radius || 10;
+    const attackMobs = gcfg.attackMobs !== false;
+    const attackPlayers = gcfg.attackPlayers === true;
+
+    guardState.active = true;
+    guardState.pos = bot.entity.position.clone();
+    bot.chat(`🛡️ Guarding this area (radius ${radius}).`);
+
+    const defaultMove = new Movements(bot);
+    bot.pathfinder.setMovements(defaultMove);
+
+    guardState.interval = setInterval(() => {
+        if (!guardState.active || !guardState.pos) return;
+        if (bot.pvp.target) return; // Already engaging a target
+
+        const target = bot.nearestEntity(e => {
+            if (e === bot.entity) return false;
+            if (e.position.distanceTo(guardState.pos) > radius) return false;
+            if (attackMobs && e.type === 'mob' && e.kind === 'Hostile mobs') return true;
+            if (attackPlayers && e.type === 'player' && e.username !== bot.username) return true;
+            return false;
+        });
+
+        if (target) {
+            bot.pvp.attack(target);
+        } else if (bot.entity.position.distanceTo(guardState.pos) > 3) {
+            bot.pathfinder.setGoal(new goals.GoalBlock(guardState.pos.x, guardState.pos.y, guardState.pos.z));
+        }
+    }, 1000);
+}
+
 function cmd_follow(bot, username) {
     const player = bot.players[username];
     if (!player || !player.entity) {
@@ -28,6 +79,7 @@ function cmd_fight(bot, username) {
 
 function cmd_stop(bot, username) {
     try {
+        if (guardState.active) stopGuard(bot);
         bot.pvp.stop();
         bot.pathfinder.setGoal(null);
         bot.chat('Combat and movement terminated.');
@@ -114,5 +166,6 @@ module.exports = {
     stop: cmd_stop,
     goto: cmd_goto,
     mine: cmd_mine,
-    protect: cmd_protect
+    protect: cmd_protect,
+    guard: cmd_guard
 };

@@ -392,6 +392,69 @@ async function cmd_status(bot, username) {
     bot.whisper(username, `🤖 Status: ${status} | ❤️ Health: ${health}/20 | 🍖 Food: ${food}/20`);
 }
 
+async function cmd_coinflip(bot, username) {
+    bot.whisper(username, `🪙 ${Math.random() < 0.5 ? 'Heads' : 'Tails'}!`);
+}
+
+async function cmd_roll(bot, username, args) {
+    let count = 1;
+    let sides = 6;
+    if (args && args[0]) {
+        const match = args[0].toLowerCase().match(/^(\d*)d(\d+)$/);
+        if (match) {
+            count = parseInt(match[1]) || 1;
+            sides = parseInt(match[2]);
+        } else {
+            sides = parseInt(args[0]) || 6;
+        }
+    }
+    if (sides < 1 || count < 1 || count > 100) {
+        bot.whisper(username, 'Usage: !roll [sides] or !roll <count>d<sides>');
+        return;
+    }
+    const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
+    const total = rolls.reduce((a, b) => a + b, 0);
+    if (count === 1) bot.whisper(username, `🎲 You rolled a ${total} (d${sides}).`);
+    else bot.whisper(username, `🎲 ${rolls.join(' + ')} = ${total} (${count}d${sides}).`);
+}
+
+const EIGHT_BALL_ANSWERS = [
+    'It is certain.', 'Without a doubt.', 'Yes, definitely.', 'You may rely on it.',
+    'Most likely.', 'Outlook good.', 'Signs point to yes.', 'Reply hazy, try again.',
+    'Ask again later.', 'Cannot predict now.', "Don't count on it.", 'My reply is no.',
+    'Very doubtful.', 'Outlook not so good.'
+];
+
+async function cmd_8ball(bot, username, args) {
+    if (!args || args.length === 0) {
+        bot.whisper(username, 'Usage: !8ball <question>');
+        return;
+    }
+    const answer = EIGHT_BALL_ANSWERS[Math.floor(Math.random() * EIGHT_BALL_ANSWERS.length)];
+    bot.whisper(username, `🎱 ${answer}`);
+}
+
+async function cmd_time(bot, username) {
+    const t = bot.time?.timeOfDay;
+    if (typeof t !== 'number') {
+        bot.whisper(username, "I can't tell the time right now.");
+        return;
+    }
+    const isDay = t >= 0 && t < 12000;
+    const hours = Math.floor(((t / 1000 + 6) % 24));
+    const minutes = Math.floor((t % 1000) / 1000 * 60);
+    const clock = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    bot.whisper(username, `🕒 In-game time: ${clock} (${isDay ? '☀️ Day' : '🌙 Night'})`);
+}
+
+async function cmd_uptime(bot, username) {
+    const total = Math.floor(process.uptime());
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    bot.whisper(username, `⏱️ Uptime: ${h}h ${m}m ${s}s`);
+}
+
 async function cmd_exchange(bot, username) {
     const trades = config.exchange.trades;
     bot.whisper(username, '--- 🔄 Current Trade Rates ---');
@@ -428,5 +491,10 @@ module.exports = {
     players: cmd_players,
     broadcast: cmd_broadcast,
     status: cmd_status,
-    exchange: cmd_exchange
+    exchange: cmd_exchange,
+    coinflip: cmd_coinflip,
+    roll: cmd_roll,
+    eightball: cmd_8ball,
+    time: cmd_time,
+    uptime: cmd_uptime
 };

@@ -75,6 +75,11 @@ The bot is configured via `config.json`. You can change the server connection, b
 | `!log` | Show recent logs (Owner) | `!log` |
 | `!clearwins` | Reset leaderboard (Owner)| `!clearwins` |
 | `!broadcast` | Sends shouting message | `!broadcast <msg>` |
+| `!coinflip` | Flips a coin | `!coinflip` |
+| `!roll` | Rolls dice | `!roll [sides\|NdM]` |
+| `!8ball` | Magic 8-Ball answer | `!8ball <question>` |
+| `!time` | In-game time (day/night) | `!time` |
+| `!uptime` | Bot running time | `!uptime` |
 
 
 *...and many more! Try `!help` in-game.*
