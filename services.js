@@ -392,6 +392,70 @@ async function cmd_status(bot, username) {
     bot.whisper(username, `🤖 Status: ${status} | ❤️ Health: ${health}/20 | 🍖 Food: ${food}/20`);
 }
 
+async function cmd_distance(bot, username, args) {
+    const targetName = (args && args[0]) ? args[0] : username;
+    const player = bot.players[targetName];
+    if (!player || !player.entity) {
+        bot.whisper(username, `I can't see ${targetName}.`);
+        return;
+    }
+    const dist = bot.entity.position.distanceTo(player.entity.position);
+    bot.whisper(username, `📏 ${targetName} is ${dist.toFixed(1)} blocks away.`);
+}
+
+async function cmd_reverse(bot, username, args) {
+    if (!args || args.length === 0) {
+        bot.whisper(username, 'Usage: !reverse <text>');
+        return;
+    }
+    bot.whisper(username, args.join(' ').split('').reverse().join(''));
+}
+
+async function cmd_choose(bot, username, args) {
+    if (!args || args.length === 0) {
+        bot.whisper(username, 'Usage: !choose <option1, option2, ...>');
+        return;
+    }
+    const joined = args.join(' ');
+    const options = (joined.includes(',') ? joined.split(',') : joined.split(/\s+/))
+        .map(o => o.trim())
+        .filter(Boolean);
+    if (options.length === 0) {
+        bot.whisper(username, 'Give me some options to choose from.');
+        return;
+    }
+    const pick = options[Math.floor(Math.random() * options.length)];
+    bot.whisper(username, `🤔 I choose: ${pick}`);
+}
+
+async function cmd_define(bot, username, args) {
+    if (!args || args.length === 0) {
+        bot.whisper(username, 'Usage: !define <word>');
+        return;
+    }
+    const word = args[0];
+    try {
+        const res = await axios.get(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+        const entry = res.data[0];
+        const meaning = entry.meanings[0];
+        const def = meaning.definitions[0].definition;
+        bot.whisper(username, `📖 ${entry.word} (${meaning.partOfSpeech}): ${def}`.slice(0, 250));
+    } catch (err) {
+        if (err.response && err.response.status === 404) bot.whisper(username, `No definition found for "${word}".`);
+        else bot.whisper(username, 'Error fetching definition.');
+    }
+}
+
+async function cmd_quote(bot, username) {
+    try {
+        const res = await axios.get('https://zenquotes.io/api/random');
+        const { q, a } = res.data[0];
+        bot.whisper(username, `"${q}" — ${a}`.slice(0, 250));
+    } catch (err) {
+        bot.whisper(username, 'Sorry, I could not fetch a quote at this time.');
+    }
+}
+
 async function cmd_coinflip(bot, username) {
     bot.whisper(username, `🪙 ${Math.random() < 0.5 ? 'Heads' : 'Tails'}!`);
 }
@@ -496,5 +560,10 @@ module.exports = {
     roll: cmd_roll,
     eightball: cmd_8ball,
     time: cmd_time,
-    uptime: cmd_uptime
+    uptime: cmd_uptime,
+    reverse: cmd_reverse,
+    choose: cmd_choose,
+    define: cmd_define,
+    quote: cmd_quote,
+    distance: cmd_distance
 };
