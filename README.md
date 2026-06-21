@@ -80,6 +80,13 @@ The bot is configured via `config.json`. You can change the server connection, b
 | `!8ball` | Magic 8-Ball answer | `!8ball <question>` |
 | `!time` | In-game time (day/night) | `!time` |
 | `!uptime` | Bot running time | `!uptime` |
+| `!come` | Bot walks to you once | `!come` |
+| `!equip` | Equips an item | `!equip <item>` |
+| `!drop` | Drops held or named item | `!drop [item] [count]` |
+| `!reverse` | Reverses text | `!reverse <text>` |
+| `!choose` | Picks a random option | `!choose <a, b, c>` |
+| `!define` | Word definition | `!define <word>` |
+| `!quote` | Random inspirational quote | `!quote` |
 
 
 *...and many more! Try `!help` in-game.*

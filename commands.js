@@ -129,6 +129,8 @@ const COMMANDS = {
   },
   '!mine': act.mine,
   '!protect': act.protect,
+  '!come': act.come,
+  '!equip': act.equip,
   '!guard': (bot, username, args) => {
     if (username !== OWNER) return;
     act.guard(bot, username, args, config);
@@ -137,7 +139,7 @@ const COMMANDS = {
     if (username !== OWNER) return;
     bot.inventory.items().forEach(item => bot.tossStack(item));
   },
-  '!drop': (bot, username) => bot.heldItem ? bot.tossStack(bot.heldItem) : bot.whisper(username, 'Nothing in hand.'),
+  '!drop': act.drop,
 
   // Service/Bot State
   '!inventory': svc.inventory,
@@ -154,6 +156,10 @@ const COMMANDS = {
   '!8ball': svc.eightball,
   '!time': svc.time,
   '!uptime': svc.uptime,
+  '!reverse': svc.reverse,
+  '!choose': svc.choose,
+  '!define': svc.define,
+  '!quote': svc.quote,
   '!bookmark': (bot, username, args) => {
     if (username !== OWNER || !args[0]) return;
     db.bookmarks.set(args[0], bot.entity.position);
@@ -225,7 +231,7 @@ const COMMAND_INFO = {
   '!protect': { description: 'Follows and defends a player.', format: '!protect <player>' },
   '!mine': { description: 'Mines a specific block type nearby.', format: '!mine <block> [count]' },
   '!trash': { description: 'Owner only: Drops all inventory items.', format: '!trash' },
-  '!drop': { description: 'Drops the currently held item.', format: '!drop' },
+  '!drop': { description: 'Drops the held item, or a named item if specified.', format: '!drop [item] [count]' },
   '!status': { description: 'Shows bot status, health, and food.', format: '!status' },
   '!exchange': { description: 'Shows current item trade rates.', format: '!exchange' },
   '!hand': { description: 'Shows what the bot is holding.', format: '!hand' },
@@ -238,6 +244,12 @@ const COMMAND_INFO = {
   '!8ball': { description: 'Answers a yes/no question, Magic 8-Ball style.', format: '!8ball <question>' },
   '!time': { description: 'Shows the in-game time (day/night).', format: '!time' },
   '!uptime': { description: 'Shows how long the bot has been running.', format: '!uptime' },
+  '!come': { description: 'Bot walks to your location once.', format: '!come' },
+  '!equip': { description: 'Equips an item from inventory (armor auto-detected).', format: '!equip <item>' },
+  '!reverse': { description: 'Reverses the given text.', format: '!reverse <text>' },
+  '!choose': { description: 'Picks a random option from a list.', format: '!choose <a, b, c>' },
+  '!define': { description: 'Looks up a word definition.', format: '!define <word>' },
+  '!quote': { description: 'Shares a random inspirational quote.', format: '!quote' },
   '!log': { description: 'Owner only: Shows recent chat logs.', format: '!log' },
   '!newchat': { description: 'Starts a fresh AI conversation.', format: '!newchat' },
   '!savechat': { description: 'Saves current AI conversation.', format: '!savechat <name>' },

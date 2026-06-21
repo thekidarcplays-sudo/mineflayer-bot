@@ -141,6 +141,79 @@ async function cmd_mine(bot, username, args) {
     }
 }
 
+function cmd_come(bot, username) {
+    const player = bot.players[username];
+    if (!player || !player.entity) {
+        bot.whisper(username, "I can't see you!");
+        return;
+    }
+    bot.chat(`Coming to you, ${username}.`);
+    const defaultMove = new Movements(bot);
+    bot.pathfinder.setMovements(defaultMove);
+    const { x, y, z } = player.entity.position;
+    bot.pathfinder.setGoal(new goals.GoalNear(x, y, z, 1));
+}
+
+async function cmd_equip(bot, username, args) {
+    if (!args || args.length === 0) {
+        bot.whisper(username, 'Usage: !equip <item_name>');
+        return;
+    }
+    const itemName = args[0].toLowerCase();
+    const item = bot.inventory.items().find(i => i.name.includes(itemName));
+    if (!item) {
+        bot.whisper(username, `I don't have "${itemName}".`);
+        return;
+    }
+    let destination = 'hand';
+    if (item.name.includes('helmet')) destination = 'head';
+    else if (item.name.includes('chestplate') || item.name.includes('elytra')) destination = 'torso';
+    else if (item.name.includes('leggings')) destination = 'legs';
+    else if (item.name.includes('boots')) destination = 'feet';
+    else if (item.name.includes('shield')) destination = 'off-hand';
+    try {
+        await bot.equip(item, destination);
+        bot.whisper(username, `Equipped ${item.name} (${destination}).`);
+    } catch (err) {
+        console.error('equip error', err);
+        bot.whisper(username, `Failed to equip ${item.name}.`);
+    }
+}
+
+async function cmd_drop(bot, username, args) {
+    // No args: drop whatever is currently in hand.
+    if (!args || args.length === 0) {
+        if (!bot.heldItem) {
+            bot.whisper(username, 'Nothing in hand.');
+            return;
+        }
+        try {
+            const held = bot.heldItem;
+            await bot.tossStack(held);
+            bot.chat(`Dropped ${held.count}x ${held.name}.`);
+        } catch (err) {
+            console.error('drop error', err);
+            bot.whisper(username, 'Failed to drop held item.');
+        }
+        return;
+    }
+    const itemName = args[0].toLowerCase();
+    const count = parseInt(args[1]) || null;
+    const item = bot.inventory.items().find(i => i.name.includes(itemName));
+    if (!item) {
+        bot.whisper(username, `I don't have "${itemName}".`);
+        return;
+    }
+    try {
+        if (count) await bot.toss(item.type, null, count);
+        else await bot.tossStack(item);
+        bot.chat(`Dropped ${count || item.count}x ${item.name}.`);
+    } catch (err) {
+        console.error('drop error', err);
+        bot.whisper(username, `Failed to drop ${item.name}.`);
+    }
+}
+
 function cmd_protect(bot, username, args) {
     if (!args || args.length === 0) {
         bot.pvp.stop();
@@ -167,5 +240,8 @@ module.exports = {
     goto: cmd_goto,
     mine: cmd_mine,
     protect: cmd_protect,
-    guard: cmd_guard
+    guard: cmd_guard,
+    come: cmd_come,
+    equip: cmd_equip,
+    drop: cmd_drop
 };
