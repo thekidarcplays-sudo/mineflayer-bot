@@ -392,6 +392,17 @@ async function cmd_status(bot, username) {
     bot.whisper(username, `🤖 Status: ${status} | ❤️ Health: ${health}/20 | 🍖 Food: ${food}/20`);
 }
 
+async function cmd_distance(bot, username, args) {
+    const targetName = (args && args[0]) ? args[0] : username;
+    const player = bot.players[targetName];
+    if (!player || !player.entity) {
+        bot.whisper(username, `I can't see ${targetName}.`);
+        return;
+    }
+    const dist = bot.entity.position.distanceTo(player.entity.position);
+    bot.whisper(username, `📏 ${targetName} is ${dist.toFixed(1)} blocks away.`);
+}
+
 async function cmd_reverse(bot, username, args) {
     if (!args || args.length === 0) {
         bot.whisper(username, 'Usage: !reverse <text>');
@@ -553,5 +564,6 @@ module.exports = {
     reverse: cmd_reverse,
     choose: cmd_choose,
     define: cmd_define,
-    quote: cmd_quote
+    quote: cmd_quote,
+    distance: cmd_distance
 };

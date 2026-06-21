@@ -214,6 +214,69 @@ async function cmd_drop(bot, username, args) {
     }
 }
 
+function cmd_look(bot, username, args) {
+    const targetName = (args && args[0]) ? args[0] : username;
+    const player = bot.players[targetName];
+    if (!player || !player.entity) {
+        bot.whisper(username, `I can't see ${targetName}.`);
+        return;
+    }
+    const e = player.entity;
+    bot.lookAt(e.position.offset(0, e.height || 1.6, 0));
+    bot.whisper(username, `Looking at ${targetName}.`);
+}
+
+async function cmd_jump(bot, username) {
+    bot.setControlState('jump', true);
+    setTimeout(() => bot.setControlState('jump', false), 500);
+    bot.chat('Boing!');
+}
+
+const DEFAULT_FOODS = [
+    'cooked_beef', 'cooked_chicken', 'cooked_porkchop', 'cooked_mutton',
+    'cooked_rabbit', 'cooked_cod', 'cooked_salmon', 'bread', 'apple',
+    'golden_apple', 'enchanted_golden_apple', 'carrot', 'baked_potato'
+];
+
+async function cmd_eat(bot, username, args, foodItems) {
+    const foodList = foodItems || DEFAULT_FOODS;
+    const food = bot.inventory.items().find(item => foodList.includes(item.name));
+    if (!food) {
+        bot.whisper(username, "I don't have any food to eat.");
+        return;
+    }
+    try {
+        await bot.equip(food, 'hand');
+        await bot.consume();
+        bot.whisper(username, `Ate ${food.name}.`);
+    } catch (err) {
+        console.error('eat error', err);
+        bot.whisper(username, 'Failed to eat.');
+    }
+}
+
+function cmd_hunt(bot, username, args) {
+    const typeName = (args && args[0]) ? args[0].toLowerCase() : null;
+    const target = bot.nearestEntity(e => {
+        if (e === bot.entity) return false;
+        if (e.type !== 'mob' || e.kind !== 'Hostile mobs') return false;
+        if (e.position.distanceTo(bot.entity.position) > 16) return false;
+        if (typeName && !(e.name || e.displayName || '').toLowerCase().includes(typeName)) return false;
+        return true;
+    });
+    if (!target) {
+        bot.whisper(username, typeName ? `No ${typeName} nearby.` : 'No hostile mobs nearby.');
+        return;
+    }
+    const name = target.name || target.displayName || 'mob';
+    bot.chat(`⚔️ Hunting ${name}!`);
+    try {
+        bot.pvp.attack(target);
+    } catch (err) {
+        console.error('hunt error', err);
+    }
+}
+
 function cmd_protect(bot, username, args) {
     if (!args || args.length === 0) {
         bot.pvp.stop();
@@ -243,5 +306,9 @@ module.exports = {
     guard: cmd_guard,
     come: cmd_come,
     equip: cmd_equip,
-    drop: cmd_drop
+    drop: cmd_drop,
+    look: cmd_look,
+    jump: cmd_jump,
+    eat: cmd_eat,
+    hunt: cmd_hunt
 };
